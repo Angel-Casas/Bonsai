@@ -1,0 +1,170 @@
+{
+  "hero": {
+    "subtitle": "Branch your conversations, reduce your context.",
+    "cta": {
+      "enterApp": "Enter App",
+      "howItWorks": "How it works"
+    },
+    "trustTags": {
+      "localFirst": "Local-first",
+      "encrypted": "Encrypted",
+      "offline": "Offline"
+    }
+  },
+  "howItWorks": {
+    "sectionTag": "HOW IT WORKS",
+    "title": "Visual Thinking, Evolved",
+    "subtitle": "Don't lose your train of thought. Branch off when ideas diverge to keep your workspace clean.",
+    "stepOf": "of",
+    "steps": {
+      "branchAnywhere": {
+        "title": "Branch Anywhere",
+        "description": "Create a new conversation path from any point in your chat. Click the continue button to branch off and explore a different direction—without losing your original thread.",
+        "buttonText": "Create your first branch"
+      },
+      "keepContextFocused": {
+        "title": "Keep Context Focused",
+        "description": "Branch as many times as needed to keep each conversation focused. Notice how the UX Decisions branch has context from the start but cannot see the other branches—keeping your token usage low and responses relevant.",
+        "buttonText": "See it in action"
+      },
+      "controlYourContext": {
+        "title": "Control Your Context",
+        "description": "Navigate between branches using the sidebar. Toggle individual messages in or out of the AI's context with a single click. Green means included, gray means excluded."
+      }
+    },
+    "continueButton": "Continue",
+    "branchLabels": {
+      "centralPlan": "Central Plan",
+      "legalThread": "Legal Thread",
+      "copywriting": "Copywriting",
+      "uxDecisions": "UX Decisions"
+    }
+  },
+  "mockConversation": {
+    "main": {
+      "title": "SAAS Project",
+      "messages": [
+        { "role": "user", "content": "I need help planning a product launch for our new SaaS tool." },
+        { "role": "assistant", "content": "I'd be happy to help you plan your SaaS product launch. Let's break this down into key areas: positioning, timeline, channels, and metrics. What's your target audience?" },
+        { "role": "user", "content": "We're targeting small business owners who need project management solutions." },
+        { "role": "assistant", "content": "Great target market. For small business owners, I recommend focusing on ease of use and quick time-to-value. Should we start with the messaging strategy or the launch timeline?" }
+      ]
+    },
+    "legal": {
+      "title": "Legal Thread",
+      "subtitle": "Terms of service review",
+      "messages": [
+        { "role": "user", "content": "Before we continue, I need to review the legal requirements for our terms of service." },
+        { "role": "assistant", "content": "For a SaaS product, your Terms of Service should cover: data handling, liability limitations, subscription terms, and cancellation policies. Do you have existing legal templates?" },
+        { "role": "user", "content": "We have a basic template but need to add GDPR compliance sections." }
+      ]
+    },
+    "copy": {
+      "title": "Copywriting",
+      "subtitle": "Landing page copy draft",
+      "messages": [
+        { "role": "user", "content": "Let's work on the landing page copy for the launch." },
+        { "role": "assistant", "content": "For your landing page, I suggest leading with the pain point: \"Stop juggling spreadsheets.\" Then highlight your key differentiator. What makes your tool unique?" },
+        { "role": "user", "content": "We have AI-powered task prioritization that learns from user behavior." }
+      ]
+    },
+    "ux": {
+      "title": "UX Decisions",
+      "subtitle": "Onboarding flow design",
+      "messages": [
+        { "role": "user", "content": "I want to discuss the onboarding experience for new users." },
+        { "role": "assistant", "content": "For SaaS onboarding, the goal is to get users to their \"aha moment\" quickly. For a project management tool, that's usually creating their first project. Want to map out the steps?" }
+      ]
+    },
+    "branchedTo": "Branched to",
+    "branches": "Branches",
+    "conversation": "Conversation",
+    "mainConversation": "Main conversation",
+    "viewDiagram": "View diagram"
+  },
+  "features": {
+    "sectionTag": "SPECIFICATIONS",
+    "title": "System Components",
+    "subtitle": "Every module designed for the branching paradigm.",
+    "items": {
+      "branchAnywhere": {
+        "title": "Branch Anywhere",
+        "description": "Create new conversation paths from any message. Explore alternatives without losing your original thread."
+      },
+      "hybridContext": {
+        "title": "Hybrid Context",
+        "description": "Control exactly what the AI sees. Add or remove entire branches or specific messages from the AI context window."
+      },
+      "lowerTokenSpend": {
+        "title": "Lower Token Spend",
+        "description": "Smaller contexts mean faster responses and significantly lower API bills."
+      },
+      "splitView": {
+        "title": "Split View",
+        "description": "Compare two branches side-by-side. Independent navigation in each pane."
+      },
+      "graphExplorer": {
+        "title": "Graph Explorer",
+        "description": "Visualize your entire conversation tree. Pan, zoom, and navigate the full structure."
+      },
+      "localEncrypted": {
+        "title": "Local & Encrypted",
+        "description": "Your data stays on your device. Optional passphrase encryption for sensitive conversations."
+      }
+    }
+  },
+  "faq": {
+    "sectionTag": "REFERENCE",
+    "title": "Technical FAQ",
+    "items": [
+      {
+        "question": "What is branching chat?",
+        "answer": "Bonsai adds a second dimension to your conversations. Traditional chats are linear and one-dimensional—each message follows the last. With branching, you can split off from any point to explore multiple paths simultaneously, turning a single thread into a tree of possibilities."
+      },
+      {
+        "question": "Why does context matter?",
+        "answer": "The context window is everything the AI \"sees\" when generating a response. A larger context means more information for the AI to work with, but it also means higher costs since you pay per token. Even worse, oversized contexts increase the risk of hallucinations as the model struggles to stay coherent across too much information. Bonsai helps you keep context lean and relevant."
+      },
+      {
+        "question": "Is my data private?",
+        "answer": "Yes. Bonsai is local-first—all your conversations are stored in your browser's IndexedDB. Nothing is sent to our servers. You can optionally enable passphrase-based encryption for additional protection."
+      },
+      {
+        "question": "Does it work offline?",
+        "answer": "The app itself works offline as a PWA. You can browse, edit, and organize your conversations without internet. Generating new AI responses requires connectivity to the model API."
+      },
+      {
+        "question": "Which models are supported?",
+        "answer": "Bonsai integrates with NanoGPT, giving you access to models like GPT-4o, Claude, and more. You can set a default model per conversation or override it for individual messages."
+      },
+      {
+        "question": "How does this reduce token cost?",
+        "answer": "By manually excluding irrelevant past messages (pruning), you send less text to the API. Since LLM providers charge by the token input, smaller context windows equal smaller bills."
+      },
+      {
+        "question": "Can I export branches?",
+        "answer": "Yes. You can export any single branch as a markdown file, or the entire tree structure as a JSON file for backup or sharing."
+      }
+    ]
+  },
+  "footer": {
+    "cta": "Initialize Bonsai",
+    "tagline": "Local-first. Private. Yours.",
+    "links": {
+      "dataStored": "All data stored locally",
+      "github": "GitHub",
+      "docs": "Documentation"
+    }
+  },
+  "tooltips": {
+    "switchToNight": "Switch to night mode",
+    "switchToDay": "Switch to day mode",
+    "removeAllContext": "Remove all from context",
+    "addAllContext": "Add all to context",
+    "removeContext": "Remove from context",
+    "addContext": "Add to context"
+  },
+  "languageSelector": {
+    "label": "Language"
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "hero": {
+    "subtitle": "分支对话，精简上下文。",
+    "cta": {
+      "enterApp": "进入应用",
+      "howItWorks": "了解原理"
+    },
+    "trustTags": {
+      "localFirst": "本地优先",
+      "encrypted": "加密保护",
+      "offline": "离线可用"
+    }
+  },
+  "howItWorks": {
+    "sectionTag": "工作原理",
+    "title": "视觉思维，进化升级",
+    "subtitle": "不再丢失思路。当想法分歧时创建分支，保持工作区整洁。",
+    "stepOf": "/",
+    "steps": {
+      "branchAnywhere": {
+        "title": "随处分支",
+        "description": "从对话的任意位置创建新的对话路径。点击继续按钮即可分支探索不同方向，同时保留原有思路。",
+        "buttonText": "创建你的第一个分支"
+      },
+      "keepContextFocused": {
+        "title": "保持上下文聚焦",
+        "description": "根据需要创建任意数量的分支，保持每个对话的专注。注意用户体验决策分支如何继承起始上下文但看不到其他分支，从而降低token消耗并保持响应相关性。",
+        "buttonText": "查看实际效果"
+      },
+      "controlYourContext": {
+        "title": "掌控你的上下文",
+        "description": "使用侧边栏在分支间导航。单击即可切换消息是否包含在AI上下文中。绿色表示包含，灰色表示排除。"
+      }
+    },
+    "continueButton": "继续",
+    "branchLabels": {
+      "centralPlan": "中心计划",
+      "legalThread": "法务讨论",
+      "copywriting": "文案撰写",
+      "uxDecisions": "用户体验决策"
+    }
+  },
+  "mockConversation": {
+    "main": {
+      "title": "SaaS项目",
+      "messages": [
+        { "role": "user", "content": "我需要帮助规划我们新SaaS工具的产品发布。" },
+        { "role": "assistant", "content": "我很乐意帮助你规划SaaS产品发布。让我们把它分解为关键领域：定位、时间线、渠道和指标。你的目标受众是什么？" },
+        { "role": "user", "content": "我们的目标是需要项目管理解决方案的小企业主。" },
+        { "role": "assistant", "content": "很好的目标市场。对于小企业主，我建议专注于易用性和快速价值实现。我们先从消息策略还是发布时间线开始？" }
+      ]
+    },
+    "legal": {
+      "title": "法务讨论",
+      "subtitle": "服务条款审核",
+      "messages": [
+        { "role": "user", "content": "在继续之前，我需要审查我们服务条款的法律要求。" },
+        { "role": "assistant", "content": "对于SaaS产品，你的服务条款应涵盖：数据处理、责任限制、订阅条款和取消政策。你有现有的法律模板吗？" },
+        { "role": "user", "content": "我们有一个基本模板，但需要添加GDPR合规部分。" }
+      ]
+    },
+    "copy": {
+      "title": "文案撰写",
+      "subtitle": "落地页文案草稿",
+      "messages": [
+        { "role": "user", "content": "让我们为发布编写落地页文案。" },
+        { "role": "assistant", "content": "对于你的落地页，我建议以痛点开头：\"停止在电子表格间疲于奔命。\"然后突出你的关键差异化。是什么让你的工具独一无二？" },
+        { "role": "user", "content": "我们有AI驱动的任务优先级排序，可以从用户行为中学习。" }
+      ]
+    },
+    "ux": {
+      "title": "用户体验决策",
+      "subtitle": "新手引导流程设计",
+      "messages": [
+        { "role": "user", "content": "我想讨论新用户的引导体验。" },
+        { "role": "assistant", "content": "对于SaaS引导，目标是让用户快速达到他们的\"顿悟时刻\"。对于项目管理工具，这通常是创建他们的第一个项目。想要规划一下步骤吗？" }
+      ]
+    },
+    "branchedTo": "已分支到",
+    "branches": "分支",
+    "conversation": "对话",
+    "mainConversation": "主对话",
+    "viewDiagram": "查看图表"
+  },
+  "features": {
+    "sectionTag": "功能规格",
+    "title": "系统组件",
+    "subtitle": "每个模块都为分支范式而设计。",
+    "items": {
+      "branchAnywhere": {
+        "title": "随处分支",
+        "description": "从任意消息创建新的对话路径。探索替代方案而不丢失原有思路。"
+      },
+      "hybridContext": {
+        "title": "混合上下文",
+        "description": "精确控制AI所见内容。从AI上下文窗口添加或移除整个分支或特定消息。"
+      },
+      "lowerTokenSpend": {
+        "title": "降低Token消耗",
+        "description": "更小的上下文意味着更快的响应和显著降低的API费用。"
+      },
+      "splitView": {
+        "title": "分屏视图",
+        "description": "并排比较两个分支。每个面板独立导航。"
+      },
+      "graphExplorer": {
+        "title": "图形浏览器",
+        "description": "可视化整个对话树。平移、缩放并导航完整结构。"
+      },
+      "localEncrypted": {
+        "title": "本地加密",
+        "description": "数据保留在你的设备上。可选密码加密保护敏感对话。"
+      }
+    }
+  },
+  "faq": {
+    "sectionTag": "参考资料",
+    "title": "技术常见问题",
+    "items": [
+      {
+        "question": "什么是分支聊天？",
+        "answer": "Bonsai为你的对话增加了第二个维度。传统聊天是线性的、一维的——每条消息都跟在前一条后面。通过分支，你可以从任意点分离出来同时探索多条路径，将单一线程变成可能性之树。"
+      },
+      {
+        "question": "为什么上下文很重要？",
+        "answer": "上下文窗口是AI生成响应时\"看到\"的所有内容。更大的上下文意味着AI可以使用更多信息，但也意味着更高的成本，因为你按token付费。更糟糕的是，过大的上下文会增加幻觉风险，因为模型难以在太多信息中保持连贯。Bonsai帮助你保持上下文精简和相关。"
+      },
+      {
+        "question": "我的数据是私密的吗？",
+        "answer": "是的。Bonsai是本地优先的——所有对话都存储在浏览器的IndexedDB中。不会发送任何内容到我们的服务器。你可以选择启用基于密码的加密以获得额外保护。"
+      },
+      {
+        "question": "离线能用吗？",
+        "answer": "应用本身作为PWA可以离线工作。你可以在没有网络的情况下浏览、编辑和组织对话。生成新的AI响应需要连接到模型API。"
+      },
+      {
+        "question": "支持哪些模型？",
+        "answer": "Bonsai集成了NanoGPT，让你可以访问GPT-4o、Claude等模型。你可以为每个对话设置默认模型，或为单个消息覆盖它。"
+      },
+      {
+        "question": "这如何降低token成本？",
+        "answer": "通过手动排除不相关的历史消息（修剪），你发送更少的文本到API。由于LLM提供商按输入token收费，更小的上下文窗口等于更小的账单。"
+      },
+      {
+        "question": "我可以导出分支吗？",
+        "answer": "可以。你可以将任何单个分支导出为markdown文件，或将整个树结构导出为JSON文件以备份或分享。"
+      }
+    ]
+  },
+  "footer": {
+    "cta": "初始化 Bonsai",
+    "tagline": "本地优先。隐私保护。属于你。",
+    "links": {
+      "dataStored": "数据本地存储",
+      "github": "GitHub",
+      "docs": "文档"
+    }
+  },
+  "tooltips": {
+    "switchToNight": "切换到夜间模式",
+    "switchToDay": "切换到日间模式",
+    "removeAllContext": "从上下文中移除全部",
+    "addAllContext": "添加全部到上下文",
+    "removeContext": "从上下文中移除",
+    "addContext": "添加到上下文"
+  },
+  "languageSelector": {
+    "label": "语言"
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "hero": {
+    "subtitle": "Ramifica tus conversaciones, reduce tu contexto.",
+    "cta": {
+      "enterApp": "Entrar",
+      "howItWorks": "Cómo funciona"
+    },
+    "trustTags": {
+      "localFirst": "Local primero",
+      "encrypted": "Encriptado",
+      "offline": "Sin conexión"
+    }
+  },
+  "howItWorks": {
+    "sectionTag": "CÓMO FUNCIONA",
+    "title": "Pensamiento Visual, Evolucionado",
+    "subtitle": "No pierdas el hilo de tus ideas. Ramifica cuando las ideas divergen para mantener tu espacio de trabajo limpio.",
+    "stepOf": "de",
+    "steps": {
+      "branchAnywhere": {
+        "title": "Ramifica en Cualquier Punto",
+        "description": "Crea una nueva ruta de conversación desde cualquier punto de tu chat. Haz clic en el botón continuar para ramificar y explorar una dirección diferente, sin perder tu hilo original.",
+        "buttonText": "Crea tu primera rama"
+      },
+      "keepContextFocused": {
+        "title": "Mantén el Contexto Enfocado",
+        "description": "Ramifica tantas veces como necesites para mantener cada conversación enfocada. Observa cómo la rama de Decisiones UX tiene contexto desde el inicio pero no puede ver las otras ramas, manteniendo bajo tu uso de tokens y respuestas relevantes.",
+        "buttonText": "Verlo en acción"
+      },
+      "controlYourContext": {
+        "title": "Controla Tu Contexto",
+        "description": "Navega entre ramas usando la barra lateral. Activa o desactiva mensajes individuales del contexto de la IA con un solo clic. Verde significa incluido, gris significa excluido."
+      }
+    },
+    "continueButton": "Continuar",
+    "branchLabels": {
+      "centralPlan": "Plan Central",
+      "legalThread": "Hilo Legal",
+      "copywriting": "Redacción",
+      "uxDecisions": "Decisiones UX"
+    }
+  },
+  "mockConversation": {
+    "main": {
+      "title": "Proyecto SAAS",
+      "messages": [
+        { "role": "user", "content": "Necesito ayuda para planificar el lanzamiento de nuestra nueva herramienta SaaS." },
+        { "role": "assistant", "content": "Estaré encantado de ayudarte a planificar el lanzamiento. Dividámoslo en áreas clave: posicionamiento, cronograma, canales y métricas. ¿Cuál es tu público objetivo?" },
+        { "role": "user", "content": "Nos dirigimos a propietarios de pequeñas empresas que necesitan soluciones de gestión de proyectos." },
+        { "role": "assistant", "content": "Excelente mercado objetivo. Para propietarios de pequeñas empresas, recomiendo enfocarse en la facilidad de uso y el valor rápido. ¿Empezamos con la estrategia de mensajes o el cronograma de lanzamiento?" }
+      ]
+    },
+    "legal": {
+      "title": "Hilo Legal",
+      "subtitle": "Revisión de términos de servicio",
+      "messages": [
+        { "role": "user", "content": "Antes de continuar, necesito revisar los requisitos legales para nuestros términos de servicio." },
+        { "role": "assistant", "content": "Para un producto SaaS, tus Términos de Servicio deben cubrir: manejo de datos, limitaciones de responsabilidad, términos de suscripción y políticas de cancelación. ¿Tienes plantillas legales existentes?" },
+        { "role": "user", "content": "Tenemos una plantilla básica pero necesitamos añadir secciones de cumplimiento GDPR." }
+      ]
+    },
+    "copy": {
+      "title": "Redacción",
+      "subtitle": "Borrador de texto para landing",
+      "messages": [
+        { "role": "user", "content": "Trabajemos en el texto de la página de aterrizaje para el lanzamiento." },
+        { "role": "assistant", "content": "Para tu página de aterrizaje, sugiero comenzar con el punto de dolor: \"Deja de malabarear hojas de cálculo.\" Luego destaca tu diferenciador clave. ¿Qué hace única a tu herramienta?" },
+        { "role": "user", "content": "Tenemos priorización de tareas impulsada por IA que aprende del comportamiento del usuario." }
+      ]
+    },
+    "ux": {
+      "title": "Decisiones UX",
+      "subtitle": "Diseño del flujo de onboarding",
+      "messages": [
+        { "role": "user", "content": "Quiero discutir la experiencia de incorporación para nuevos usuarios." },
+        { "role": "assistant", "content": "Para la incorporación SaaS, el objetivo es llevar a los usuarios a su momento \"ajá\" rápidamente. Para una herramienta de gestión de proyectos, eso suele ser crear su primer proyecto. ¿Quieres mapear los pasos?" }
+      ]
+    },
+    "branchedTo": "Ramificado a",
+    "branches": "Ramas",
+    "conversation": "Conversación",
+    "mainConversation": "Conversación principal",
+    "viewDiagram": "Ver diagrama"
+  },
+  "features": {
+    "sectionTag": "ESPECIFICACIONES",
+    "title": "Componentes del Sistema",
+    "subtitle": "Cada módulo diseñado para el paradigma de ramificación.",
+    "items": {
+      "branchAnywhere": {
+        "title": "Ramifica en Cualquier Punto",
+        "description": "Crea nuevas rutas de conversación desde cualquier mensaje. Explora alternativas sin perder tu hilo original."
+      },
+      "hybridContext": {
+        "title": "Contexto Híbrido",
+        "description": "Controla exactamente lo que la IA ve. Añade o elimina ramas completas o mensajes específicos de la ventana de contexto."
+      },
+      "lowerTokenSpend": {
+        "title": "Menor Gasto de Tokens",
+        "description": "Contextos más pequeños significan respuestas más rápidas y facturas de API significativamente menores."
+      },
+      "splitView": {
+        "title": "Vista Dividida",
+        "description": "Compara dos ramas lado a lado. Navegación independiente en cada panel."
+      },
+      "graphExplorer": {
+        "title": "Explorador de Grafos",
+        "description": "Visualiza todo tu árbol de conversación. Desplaza, amplía y navega la estructura completa."
+      },
+      "localEncrypted": {
+        "title": "Local y Encriptado",
+        "description": "Tus datos permanecen en tu dispositivo. Encriptación opcional con contraseña para conversaciones sensibles."
+      }
+    }
+  },
+  "faq": {
+    "sectionTag": "REFERENCIA",
+    "title": "Preguntas Técnicas",
+    "items": [
+      {
+        "question": "¿Qué es el chat ramificado?",
+        "answer": "Bonsai añade una segunda dimensión a tus conversaciones. Los chats tradicionales son lineales y unidimensionales: cada mensaje sigue al anterior. Con la ramificación, puedes separarte desde cualquier punto para explorar múltiples caminos simultáneamente, convirtiendo un solo hilo en un árbol de posibilidades."
+      },
+      {
+        "question": "¿Por qué importa el contexto?",
+        "answer": "La ventana de contexto es todo lo que la IA \"ve\" al generar una respuesta. Un contexto más grande significa más información para que la IA trabaje, pero también significa costos más altos ya que pagas por token. Peor aún, contextos demasiado grandes aumentan el riesgo de alucinaciones mientras el modelo lucha por mantenerse coherente. Bonsai te ayuda a mantener el contexto ligero y relevante."
+      },
+      {
+        "question": "¿Mis datos son privados?",
+        "answer": "Sí. Bonsai es local-first: todas tus conversaciones se almacenan en el IndexedDB de tu navegador. Nada se envía a nuestros servidores. Opcionalmente puedes habilitar encriptación basada en contraseña para protección adicional."
+      },
+      {
+        "question": "¿Funciona sin conexión?",
+        "answer": "La aplicación funciona sin conexión como PWA. Puedes navegar, editar y organizar tus conversaciones sin internet. Generar nuevas respuestas de IA requiere conectividad con la API del modelo."
+      },
+      {
+        "question": "¿Qué modelos son compatibles?",
+        "answer": "Bonsai se integra con NanoGPT, dándote acceso a modelos como GPT-4o, Claude y más. Puedes establecer un modelo predeterminado por conversación o anularlo para mensajes individuales."
+      },
+      {
+        "question": "¿Cómo reduce esto el costo de tokens?",
+        "answer": "Al excluir manualmente mensajes pasados irrelevantes (poda), envías menos texto a la API. Como los proveedores de LLM cobran por token de entrada, ventanas de contexto más pequeñas equivalen a facturas más pequeñas."
+      },
+      {
+        "question": "¿Puedo exportar ramas?",
+        "answer": "Sí. Puedes exportar cualquier rama individual como archivo markdown, o toda la estructura del árbol como archivo JSON para respaldo o compartir."
+      }
+    ]
+  },
+  "footer": {
+    "cta": "Inicializar Bonsai",
+    "tagline": "Local primero. Privado. Tuyo.",
+    "links": {
+      "dataStored": "Datos almacenados localmente",
+      "github": "GitHub",
+      "docs": "Documentación"
+    }
+  },
+  "tooltips": {
+    "switchToNight": "Cambiar a modo noche",
+    "switchToDay": "Cambiar a modo día",
+    "removeAllContext": "Eliminar todo del contexto",
+    "addAllContext": "Añadir todo al contexto",
+    "removeContext": "Eliminar del contexto",
+    "addContext": "Añadir al contexto"
+  },
+  "languageSelector": {
+    "label": "Idioma"
+  }
+}

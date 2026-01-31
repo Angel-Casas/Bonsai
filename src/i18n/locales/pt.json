@@ -1,0 +1,170 @@
+{
+  "hero": {
+    "subtitle": "Ramifique suas conversas, reduza seu contexto.",
+    "cta": {
+      "enterApp": "Entrar no App",
+      "howItWorks": "Como funciona"
+    },
+    "trustTags": {
+      "localFirst": "Local primeiro",
+      "encrypted": "Criptografado",
+      "offline": "Offline"
+    }
+  },
+  "howItWorks": {
+    "sectionTag": "COMO FUNCIONA",
+    "title": "Pensamento Visual, Evoluído",
+    "subtitle": "Não perca sua linha de raciocínio. Ramifique quando ideias divergirem para manter seu espaço de trabalho limpo.",
+    "stepOf": "de",
+    "steps": {
+      "branchAnywhere": {
+        "title": "Ramifique em Qualquer Lugar",
+        "description": "Crie um novo caminho de conversa de qualquer ponto do seu chat. Clique no botão continuar para ramificar e explorar uma direção diferente—sem perder seu fio original.",
+        "buttonText": "Crie sua primeira ramificação"
+      },
+      "keepContextFocused": {
+        "title": "Mantenha o Contexto Focado",
+        "description": "Ramifique quantas vezes precisar para manter cada conversa focada. Note como a ramificação Decisões UX tem contexto desde o início mas não pode ver outras ramificações—mantendo seu uso de tokens baixo e respostas relevantes.",
+        "buttonText": "Veja em ação"
+      },
+      "controlYourContext": {
+        "title": "Controle Seu Contexto",
+        "description": "Navegue entre ramificações usando a barra lateral. Alterne mensagens individuais dentro ou fora do contexto da IA com um único clique. Verde significa incluído, cinza significa excluído."
+      }
+    },
+    "continueButton": "Continuar",
+    "branchLabels": {
+      "centralPlan": "Plano Central",
+      "legalThread": "Thread Legal",
+      "copywriting": "Copywriting",
+      "uxDecisions": "Decisões UX"
+    }
+  },
+  "mockConversation": {
+    "main": {
+      "title": "Projeto SAAS",
+      "messages": [
+        { "role": "user", "content": "Preciso de ajuda para planejar o lançamento do nosso novo produto SaaS." },
+        { "role": "assistant", "content": "Ficarei feliz em ajudar a planejar o lançamento do seu produto SaaS. Vamos dividir em áreas-chave: posicionamento, cronograma, canais e métricas. Qual é seu público-alvo?" },
+        { "role": "user", "content": "Estamos mirando proprietários de pequenas empresas que precisam de soluções de gerenciamento de projetos." },
+        { "role": "assistant", "content": "Excelente mercado-alvo. Para proprietários de pequenas empresas, recomendo focar em facilidade de uso e valor rápido. Começamos pela estratégia de mensagens ou cronograma de lançamento?" }
+      ]
+    },
+    "legal": {
+      "title": "Thread Legal",
+      "subtitle": "Revisão de termos de serviço",
+      "messages": [
+        { "role": "user", "content": "Antes de continuar, preciso revisar os requisitos legais para nossos termos de serviço." },
+        { "role": "assistant", "content": "Para um produto SaaS, seus Termos de Serviço devem cobrir: tratamento de dados, limitações de responsabilidade, termos de assinatura e políticas de cancelamento. Você tem modelos legais existentes?" },
+        { "role": "user", "content": "Temos um modelo básico mas precisamos adicionar seções de conformidade com GDPR." }
+      ]
+    },
+    "copy": {
+      "title": "Copywriting",
+      "subtitle": "Rascunho de copy da landing page",
+      "messages": [
+        { "role": "user", "content": "Vamos trabalhar no copy da landing page para o lançamento." },
+        { "role": "assistant", "content": "Para sua landing page, sugiro começar com o ponto de dor: \"Pare de fazer malabarismos com planilhas.\" Depois destaque seu diferencial principal. O que torna sua ferramenta única?" },
+        { "role": "user", "content": "Temos priorização de tarefas com IA que aprende com o comportamento do usuário." }
+      ]
+    },
+    "ux": {
+      "title": "Decisões UX",
+      "subtitle": "Design do fluxo de onboarding",
+      "messages": [
+        { "role": "user", "content": "Quero discutir a experiência de onboarding para novos usuários." },
+        { "role": "assistant", "content": "Para onboarding SaaS, o objetivo é levar os usuários ao seu \"momento aha\" rapidamente. Para uma ferramenta de gerenciamento de projetos, isso geralmente é criar seu primeiro projeto. Quer mapear os passos?" }
+      ]
+    },
+    "branchedTo": "Ramificado para",
+    "branches": "Ramificações",
+    "conversation": "Conversa",
+    "mainConversation": "Conversa principal",
+    "viewDiagram": "Ver diagrama"
+  },
+  "features": {
+    "sectionTag": "ESPECIFICAÇÕES",
+    "title": "Componentes do Sistema",
+    "subtitle": "Cada módulo projetado para o paradigma de ramificação.",
+    "items": {
+      "branchAnywhere": {
+        "title": "Ramifique em Qualquer Lugar",
+        "description": "Crie novos caminhos de conversa de qualquer mensagem. Explore alternativas sem perder seu fio original."
+      },
+      "hybridContext": {
+        "title": "Contexto Híbrido",
+        "description": "Controle exatamente o que a IA vê. Adicione ou remova ramificações inteiras ou mensagens específicas da janela de contexto da IA."
+      },
+      "lowerTokenSpend": {
+        "title": "Menor Gasto de Tokens",
+        "description": "Contextos menores significam respostas mais rápidas e contas de API significativamente menores."
+      },
+      "splitView": {
+        "title": "Visualização Dividida",
+        "description": "Compare duas ramificações lado a lado. Navegação independente em cada painel."
+      },
+      "graphExplorer": {
+        "title": "Explorador de Grafos",
+        "description": "Visualize toda sua árvore de conversas. Mova, amplie e navegue pela estrutura completa."
+      },
+      "localEncrypted": {
+        "title": "Local e Criptografado",
+        "description": "Seus dados ficam no seu dispositivo. Criptografia opcional com senha para conversas sensíveis."
+      }
+    }
+  },
+  "faq": {
+    "sectionTag": "REFERÊNCIA",
+    "title": "FAQ Técnico",
+    "items": [
+      {
+        "question": "O que é chat ramificado?",
+        "answer": "Bonsai adiciona uma segunda dimensão às suas conversas. Chats tradicionais são lineares e unidimensionais—cada mensagem segue a anterior. Com ramificação, você pode se separar de qualquer ponto para explorar múltiplos caminhos simultaneamente, transformando um único fio em uma árvore de possibilidades."
+      },
+      {
+        "question": "Por que o contexto importa?",
+        "answer": "A janela de contexto é tudo que a IA \"vê\" ao gerar uma resposta. Contexto maior significa mais informação para a IA trabalhar, mas também significa custos maiores já que você paga por token. Pior ainda, contextos muito grandes aumentam o risco de alucinações. Bonsai ajuda a manter o contexto enxuto e relevante."
+      },
+      {
+        "question": "Meus dados são privados?",
+        "answer": "Sim. Bonsai é local primeiro—todas suas conversas são armazenadas no IndexedDB do seu navegador. Nada é enviado para nossos servidores. Você pode opcionalmente habilitar criptografia baseada em senha para proteção adicional."
+      },
+      {
+        "question": "Funciona offline?",
+        "answer": "O app em si funciona offline como PWA. Você pode navegar, editar e organizar suas conversas sem internet. Gerar novas respostas de IA requer conectividade com a API do modelo."
+      },
+      {
+        "question": "Quais modelos são suportados?",
+        "answer": "Bonsai integra com NanoGPT, dando acesso a modelos como GPT-4o, Claude e mais. Você pode definir um modelo padrão por conversa ou substituí-lo para mensagens individuais."
+      },
+      {
+        "question": "Como isso reduz o custo de tokens?",
+        "answer": "Excluindo manualmente mensagens passadas irrelevantes (podando), você envia menos texto para a API. Como provedores de LLM cobram por token de entrada, janelas de contexto menores equivalem a contas menores."
+      },
+      {
+        "question": "Posso exportar ramificações?",
+        "answer": "Sim. Você pode exportar qualquer ramificação individual como arquivo markdown, ou toda a estrutura da árvore como arquivo JSON para backup ou compartilhamento."
+      }
+    ]
+  },
+  "footer": {
+    "cta": "Inicializar Bonsai",
+    "tagline": "Local primeiro. Privado. Seu.",
+    "links": {
+      "dataStored": "Todos os dados armazenados localmente",
+      "github": "GitHub",
+      "docs": "Documentação"
+    }
+  },
+  "tooltips": {
+    "switchToNight": "Mudar para modo noturno",
+    "switchToDay": "Mudar para modo diurno",
+    "removeAllContext": "Remover tudo do contexto",
+    "addAllContext": "Adicionar tudo ao contexto",
+    "removeContext": "Remover do contexto",
+    "addContext": "Adicionar ao contexto"
+  },
+  "languageSelector": {
+    "label": "Idioma"
+  }
+}

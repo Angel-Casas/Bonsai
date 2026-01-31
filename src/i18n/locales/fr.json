@@ -1,0 +1,170 @@
+{
+  "hero": {
+    "subtitle": "Ramifiez vos conversations, réduisez votre contexte.",
+    "cta": {
+      "enterApp": "Entrer dans l'App",
+      "howItWorks": "Comment ça marche"
+    },
+    "trustTags": {
+      "localFirst": "Local d'abord",
+      "encrypted": "Chiffré",
+      "offline": "Hors ligne"
+    }
+  },
+  "howItWorks": {
+    "sectionTag": "COMMENT ÇA MARCHE",
+    "title": "Pensée Visuelle, Évoluée",
+    "subtitle": "Ne perdez pas le fil de vos pensées. Créez des branches quand les idées divergent pour garder votre espace de travail propre.",
+    "stepOf": "sur",
+    "steps": {
+      "branchAnywhere": {
+        "title": "Branchez N'importe Où",
+        "description": "Créez un nouveau chemin de conversation depuis n'importe quel point de votre chat. Cliquez sur le bouton continuer pour créer une branche et explorer une direction différente—sans perdre votre fil original.",
+        "buttonText": "Créez votre première branche"
+      },
+      "keepContextFocused": {
+        "title": "Gardez le Contexte Concentré",
+        "description": "Créez autant de branches que nécessaire pour garder chaque conversation concentrée. Remarquez comment la branche Décisions UX a le contexte depuis le début mais ne peut pas voir les autres branches—gardant votre utilisation de tokens basse et les réponses pertinentes.",
+        "buttonText": "Voir en action"
+      },
+      "controlYourContext": {
+        "title": "Contrôlez Votre Contexte",
+        "description": "Naviguez entre les branches via la barre latérale. Basculez des messages individuels dans ou hors du contexte IA en un seul clic. Vert signifie inclus, gris signifie exclu."
+      }
+    },
+    "continueButton": "Continuer",
+    "branchLabels": {
+      "centralPlan": "Plan Central",
+      "legalThread": "Fil Juridique",
+      "copywriting": "Rédaction",
+      "uxDecisions": "Décisions UX"
+    }
+  },
+  "mockConversation": {
+    "main": {
+      "title": "Projet SAAS",
+      "messages": [
+        { "role": "user", "content": "J'ai besoin d'aide pour planifier le lancement de notre nouveau produit SaaS." },
+        { "role": "assistant", "content": "Je serai ravi de vous aider à planifier le lancement de votre produit SaaS. Décomposons en domaines clés : positionnement, calendrier, canaux et métriques. Quel est votre public cible ?" },
+        { "role": "user", "content": "Nous ciblons les propriétaires de petites entreprises qui ont besoin de solutions de gestion de projet." },
+        { "role": "assistant", "content": "Excellent marché cible. Pour les propriétaires de petites entreprises, je recommande de se concentrer sur la facilité d'utilisation et la valeur rapide. On commence par la stratégie de message ou le calendrier de lancement ?" }
+      ]
+    },
+    "legal": {
+      "title": "Fil Juridique",
+      "subtitle": "Révision des conditions de service",
+      "messages": [
+        { "role": "user", "content": "Avant de continuer, je dois vérifier les exigences légales pour nos conditions de service." },
+        { "role": "assistant", "content": "Pour un produit SaaS, vos Conditions de Service doivent couvrir : le traitement des données, les limitations de responsabilité, les conditions d'abonnement et les politiques d'annulation. Avez-vous des modèles juridiques existants ?" },
+        { "role": "user", "content": "Nous avons un modèle de base mais nous devons ajouter des sections de conformité RGPD." }
+      ]
+    },
+    "copy": {
+      "title": "Rédaction",
+      "subtitle": "Brouillon du texte de landing page",
+      "messages": [
+        { "role": "user", "content": "Travaillons sur le texte de la landing page pour le lancement." },
+        { "role": "assistant", "content": "Pour votre landing page, je suggère de commencer par le point de douleur : « Arrêtez de jongler avec les tableurs ». Ensuite, mettez en avant votre différenciateur clé. Qu'est-ce qui rend votre outil unique ?" },
+        { "role": "user", "content": "Nous avons une priorisation des tâches par IA qui apprend du comportement des utilisateurs." }
+      ]
+    },
+    "ux": {
+      "title": "Décisions UX",
+      "subtitle": "Conception du flux d'onboarding",
+      "messages": [
+        { "role": "user", "content": "Je veux discuter de l'expérience d'onboarding pour les nouveaux utilisateurs." },
+        { "role": "assistant", "content": "Pour l'onboarding SaaS, l'objectif est d'amener les utilisateurs à leur moment « aha » rapidement. Pour un outil de gestion de projet, c'est généralement la création de leur premier projet. Voulez-vous cartographier les étapes ?" }
+      ]
+    },
+    "branchedTo": "Branché vers",
+    "branches": "Branches",
+    "conversation": "Conversation",
+    "mainConversation": "Conversation principale",
+    "viewDiagram": "Voir le diagramme"
+  },
+  "features": {
+    "sectionTag": "SPÉCIFICATIONS",
+    "title": "Composants du Système",
+    "subtitle": "Chaque module conçu pour le paradigme de ramification.",
+    "items": {
+      "branchAnywhere": {
+        "title": "Branchez N'importe Où",
+        "description": "Créez de nouveaux chemins de conversation depuis n'importe quel message. Explorez des alternatives sans perdre votre fil original."
+      },
+      "hybridContext": {
+        "title": "Contexte Hybride",
+        "description": "Contrôlez exactement ce que l'IA voit. Ajoutez ou supprimez des branches entières ou des messages spécifiques de la fenêtre de contexte de l'IA."
+      },
+      "lowerTokenSpend": {
+        "title": "Dépense de Tokens Réduite",
+        "description": "Des contextes plus petits signifient des réponses plus rapides et des factures API considérablement réduites."
+      },
+      "splitView": {
+        "title": "Vue Divisée",
+        "description": "Comparez deux branches côte à côte. Navigation indépendante dans chaque panneau."
+      },
+      "graphExplorer": {
+        "title": "Explorateur de Graphe",
+        "description": "Visualisez tout votre arbre de conversations. Déplacez, zoomez et naviguez dans la structure complète."
+      },
+      "localEncrypted": {
+        "title": "Local et Chiffré",
+        "description": "Vos données restent sur votre appareil. Chiffrement optionnel par mot de passe pour les conversations sensibles."
+      }
+    }
+  },
+  "faq": {
+    "sectionTag": "RÉFÉRENCE",
+    "title": "FAQ Technique",
+    "items": [
+      {
+        "question": "Qu'est-ce que le chat ramifié ?",
+        "answer": "Bonsai ajoute une deuxième dimension à vos conversations. Les chats traditionnels sont linéaires et unidimensionnels—chaque message suit le précédent. Avec la ramification, vous pouvez vous séparer de n'importe quel point pour explorer plusieurs chemins simultanément, transformant un seul fil en un arbre de possibilités."
+      },
+      {
+        "question": "Pourquoi le contexte est-il important ?",
+        "answer": "La fenêtre de contexte est tout ce que l'IA « voit » lors de la génération d'une réponse. Un contexte plus grand signifie plus d'informations pour l'IA, mais aussi des coûts plus élevés puisque vous payez par token. Pire encore, des contextes trop grands augmentent le risque d'hallucinations. Bonsai aide à garder le contexte léger et pertinent."
+      },
+      {
+        "question": "Mes données sont-elles privées ?",
+        "answer": "Oui. Bonsai est local d'abord—toutes vos conversations sont stockées dans l'IndexedDB de votre navigateur. Rien n'est envoyé à nos serveurs. Vous pouvez optionnellement activer le chiffrement par mot de passe pour une protection supplémentaire."
+      },
+      {
+        "question": "Ça fonctionne hors ligne ?",
+        "answer": "L'application elle-même fonctionne hors ligne en tant que PWA. Vous pouvez naviguer, éditer et organiser vos conversations sans Internet. La génération de nouvelles réponses IA nécessite une connectivité à l'API du modèle."
+      },
+      {
+        "question": "Quels modèles sont supportés ?",
+        "answer": "Bonsai s'intègre avec NanoGPT, donnant accès à des modèles comme GPT-4o, Claude et plus. Vous pouvez définir un modèle par défaut par conversation ou le remplacer pour des messages individuels."
+      },
+      {
+        "question": "Comment cela réduit-il le coût des tokens ?",
+        "answer": "En excluant manuellement les messages passés non pertinents (élagage), vous envoyez moins de texte à l'API. Comme les fournisseurs de LLM facturent par token d'entrée, des fenêtres de contexte plus petites signifient des factures plus petites."
+      },
+      {
+        "question": "Puis-je exporter des branches ?",
+        "answer": "Oui. Vous pouvez exporter n'importe quelle branche individuelle en fichier markdown, ou toute la structure de l'arbre en fichier JSON pour la sauvegarde ou le partage."
+      }
+    ]
+  },
+  "footer": {
+    "cta": "Initialiser Bonsai",
+    "tagline": "Local d'abord. Privé. Le vôtre.",
+    "links": {
+      "dataStored": "Toutes les données stockées localement",
+      "github": "GitHub",
+      "docs": "Documentation"
+    }
+  },
+  "tooltips": {
+    "switchToNight": "Passer en mode nuit",
+    "switchToDay": "Passer en mode jour",
+    "removeAllContext": "Tout retirer du contexte",
+    "addAllContext": "Tout ajouter au contexte",
+    "removeContext": "Retirer du contexte",
+    "addContext": "Ajouter au contexte"
+  },
+  "languageSelector": {
+    "label": "Langue"
+  }
+}
