@@ -4,6 +4,8 @@ Bonsai is a local-first Progressive Web App (PWA) for having branching conversat
 
 All your data is stored locally in your browser using IndexedDB. There is no backend server - your conversations and API key never leave your device (except when making requests to NanoGPT's API).
 
+**[Live Demo](https://angel-casas.github.io/Bonsai/)** - Try it now in your browser
+
 ## Features
 
 - **Branching Conversations**: Create alternative paths from any message
