@@ -46,6 +46,7 @@ export {
   isMessageOnPath,
   searchMessages,
   type ContextResolverConfig,
+  type ContextPreset,
   type ResolvedContext,
   type ContextWarning,
   type ContextWarningType,
@@ -98,3 +99,25 @@ export {
   type ValidationResult,
   type ImportResult,
 } from './exportImport';
+
+// Sync operations service
+export {
+  appendOp,
+  getPendingOps,
+  markAcked,
+  getOpStats,
+  getOrCreateClientId,
+} from './opsService';
+
+// Sync adapter
+export {
+  LocalOnlySyncAdapter,
+  type SyncAdapter,
+} from './syncAdapter';
+
+// Sync types
+export type {
+  SyncOp,
+  OpType,
+  OpStatus,
+} from './types';
