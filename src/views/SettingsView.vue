@@ -3,10 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getApiKey, setApiKey, clearApiKey, maskApiKey } from '@/api/settings'
 import { useEncryptionStore } from '@/stores/encryptionStore'
-import { useThemeStore } from '@/stores/themeStore'
-import TopNavBar from '@/components/TopNavBar.vue'
-import GridBackground from '@/components/GridBackground.vue'
-import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/api/nanogpt'
+import { useThemeStore, DAY_PALETTES, NIGHT_PALETTES, type DayPalette, type NightPalette } from '@/stores/themeStore'
+import { useSettingsPanel } from '@/composables/useSettingsPanel'
 import { runIntegrityCheck, getSchemaVersion, getDatabaseName, type IntegrityCheckResult } from '@/db/integrityCheck'
 import { deleteDatabase } from '@/db/database'
 import {
@@ -17,9 +15,18 @@ import {
   parseAndValidateImport,
   importData,
   readFileAsText,
+  exportBranchAsMarkdown,
+  exportConversationAsMarkdown,
+  exportAllAsMarkdown,
+  getConversationLeaves,
+  generateMarkdownFilename,
+  downloadMarkdownFile,
+  type LeafInfo,
   type ValidationResult,
   type ImportResult,
 } from '@/db/exportImport'
+import { listConversations } from '@/db/repositories/conversationRepository'
+import type { Conversation } from '@/db/types'
 import {
   isDevMode,
   generateDataset,
@@ -30,15 +37,37 @@ import {
 } from '@/utils/datasetGenerator'
 import { getCacheStats as getSearchCacheStats } from '@/utils/searchCache'
 import { getDecryptionCacheStats } from '@/db/encryption'
+import { collectDebugInfo, formatDebugInfo } from '@/utils/debugInfo'
+import { openFeedbackUrl } from '@/utils/feedbackUrl'
+import { useTutorial } from '@/composables/useTutorial'
+import { getOpStats, getOrCreateClientId } from '@/db/opsService'
+import { LocalOnlySyncAdapter } from '@/db/syncAdapter'
+
+const emit = defineEmits<{
+  close: []
+}>()
 
 const router = useRouter()
+const { closeSettings } = useSettingsPanel()
 const encryptionStore = useEncryptionStore()
 const themeStore = useThemeStore()
+const tutorial = useTutorial()
+
+function startQuickSetup() {
+  emit('close')
+  setTimeout(() => tutorial.startTutorial('quick-setup'), 250)
+}
+
+function startFullTour() {
+  emit('close')
+  setTimeout(() => tutorial.startTutorial('full-tour'), 250)
+}
 
 // State
 const apiKeyInput = ref('')
 const isEditing = ref(false)
 const showApiKey = ref(false)
+const showApiKeyInput = ref(false)
 const savedApiKey = ref<string | null>(null)
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -53,9 +82,13 @@ const resetConfirmText = ref('')
 const isResetting = ref(false)
 const resetSuccess = ref(false)
 
-// Export/Import state
+// Export all state
+const showExportAllDialog = ref(false)
+const exportAllFormat = ref<'json' | 'markdown'>('json')
 const isExporting = ref(false)
 const exportSuccess = ref(false)
+
+// Import state
 const isImporting = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
 const importValidation = ref<ValidationResult | null>(null)
@@ -77,6 +110,55 @@ const currentPassphrase = ref('')
 const newPassphrase = ref('')
 const newPassphraseConfirm = ref('')
 
+// Color palette collapsed state
+const showPalettes = ref(false)
+
+// Debug info state
+const isCopyingDebugInfo = ref(false)
+const debugInfoCopied = ref(false)
+
+// Export selection dialog state
+type ExportFormat = 'json' | 'markdown'
+type ExportScope = 'conversation' | 'branch'
+type ExportStep = 'conversation' | 'options' | 'branch'
+const showExportSelection = ref(false)
+const exportSelectionStep = ref<ExportStep>('conversation')
+const exportConversations = ref<Conversation[]>([])
+const isLoadingExportConversations = ref(false)
+const selectedExportConversationId = ref<string | null>(null)
+const selectedExportConversation = ref<Conversation | null>(null)
+const exportFormat = ref<ExportFormat>('json')
+const exportScope = ref<ExportScope>('conversation')
+const exportLeaves = ref<LeafInfo[]>([])
+const isLoadingExportLeaves = ref(false)
+const selectedExportLeafId = ref<string | null>(null)
+const isExportingSelection = ref(false)
+const exportSelectionSuccess = ref(false)
+
+// Sync diagnostics state
+const syncPendingCount = ref(0)
+const syncLatestTypes = ref<string[]>([])
+const syncClientId = ref('')
+const isSyncLoading = ref(false)
+const syncAdapter = new LocalOnlySyncAdapter()
+
+async function refreshSyncDiagnostics() {
+  isSyncLoading.value = true
+  try {
+    const stats = await getOpStats()
+    syncPendingCount.value = stats.pendingCount
+    syncLatestTypes.value = stats.latestTypes
+    syncClientId.value = getOrCreateClientId()
+  } finally {
+    isSyncLoading.value = false
+  }
+}
+
+async function markAllOpsAcked() {
+  await syncAdapter.resetSyncState()
+  await refreshSyncDiagnostics()
+}
+
 // Check if API key exists
 const hasKey = computed(() => savedApiKey.value !== null && savedApiKey.value.length > 0)
 
@@ -92,18 +174,21 @@ const databaseName = computed(() => getDatabaseName())
 
 onMounted(() => {
   savedApiKey.value = getApiKey()
+  refreshSyncDiagnostics()
 })
 
 function startEditing() {
   isEditing.value = true
   apiKeyInput.value = ''
   showApiKey.value = false
+  showApiKeyInput.value = false
 }
 
 function cancelEditing() {
   isEditing.value = false
   apiKeyInput.value = ''
   showApiKey.value = false
+  showApiKeyInput.value = false
 }
 
 function saveApiKey() {
@@ -117,6 +202,7 @@ function saveApiKey() {
     savedApiKey.value = apiKeyInput.value.trim()
     isEditing.value = false
     apiKeyInput.value = ''
+    showApiKeyInput.value = false
     saveStatus.value = 'saved'
     setTimeout(() => {
       saveStatus.value = 'idle'
@@ -155,6 +241,28 @@ function clearApiKeyOnly() {
   }
 }
 
+// Copy debug info to clipboard
+async function copyDebugInfo() {
+  isCopyingDebugInfo.value = true
+  debugInfoCopied.value = false
+
+  try {
+    const info = await collectDebugInfo()
+    const formatted = formatDebugInfo(info)
+    await navigator.clipboard.writeText(formatted)
+    debugInfoCopied.value = true
+
+    // Reset copied state after 2 seconds
+    setTimeout(() => {
+      debugInfoCopied.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('Failed to copy debug info:', error)
+  } finally {
+    isCopyingDebugInfo.value = false
+  }
+}
+
 // Open reset dialog
 function openResetDialog() {
   showResetDialog.value = true
@@ -184,8 +292,9 @@ async function performFullReset() {
     resetSuccess.value = true
     closeResetDialog()
 
-    // Redirect to home after short delay
+    // Close settings and redirect to home after short delay
     setTimeout(() => {
+      closeSettings()
       router.push('/')
       // Force reload to clear all state
       window.location.reload()
@@ -212,22 +321,175 @@ async function clearConversationsOnly() {
   }
 }
 
-// Export all data
-async function handleExportAll() {
+// Open the export-all format picker dialog
+function handleExportAll() {
+  showExportAllDialog.value = true
+  exportAllFormat.value = 'json'
+  exportSuccess.value = false
+}
+
+// Close the export-all dialog
+function closeExportAllDialog() {
+  showExportAllDialog.value = false
+}
+
+// Perform the actual export-all
+async function performExportAll() {
+  // Check for encryption warning
+  if (encryptionStore.encryptionEnabled) {
+    const proceed = confirm(
+      'Your data is encrypted. The export file will contain decrypted data (readable by anyone). Continue?'
+    )
+    if (!proceed) return
+  }
+
   isExporting.value = true
   exportSuccess.value = false
   try {
-    const data = await exportData({})
-    const json = serializeExport(data)
-    const filename = generateExportFilename()
-    downloadFile(json, filename)
+    if (exportAllFormat.value === 'json') {
+      const data = await exportData({})
+      const json = serializeExport(data)
+      const filename = generateExportFilename()
+      downloadFile(json, filename)
+    } else {
+      const markdown = await exportAllAsMarkdown()
+      const filename = generateMarkdownFilename('all-data')
+      downloadMarkdownFile(markdown, filename)
+    }
     exportSuccess.value = true
-    setTimeout(() => { exportSuccess.value = false }, 3000)
+    setTimeout(() => {
+      exportSuccess.value = false
+      closeExportAllDialog()
+    }, 1500)
   } catch (error) {
     console.error('Export failed:', error)
     alert('Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'))
   } finally {
     isExporting.value = false
+  }
+}
+
+// Open export selection dialog
+async function openExportSelection() {
+  showExportSelection.value = true
+  exportSelectionStep.value = 'conversation'
+  selectedExportConversationId.value = null
+  selectedExportConversation.value = null
+  exportFormat.value = 'json'
+  exportScope.value = 'conversation'
+  exportLeaves.value = []
+  selectedExportLeafId.value = null
+  exportSelectionSuccess.value = false
+  isLoadingExportConversations.value = true
+  try {
+    exportConversations.value = await listConversations()
+  } catch (error) {
+    console.error('Failed to load conversations:', error)
+    exportConversations.value = []
+  } finally {
+    isLoadingExportConversations.value = false
+  }
+}
+
+// Close export selection dialog
+function closeExportSelection() {
+  showExportSelection.value = false
+  selectedExportConversationId.value = null
+  selectedExportConversation.value = null
+  exportLeaves.value = []
+  selectedExportLeafId.value = null
+}
+
+// Move from conversation step to options step
+function exportSelectionNext() {
+  if (!selectedExportConversationId.value) return
+  selectedExportConversation.value = exportConversations.value.find(
+    c => c.id === selectedExportConversationId.value
+  ) || null
+  exportSelectionStep.value = 'options'
+}
+
+// Move from options step to branch step (or perform export)
+async function exportSelectionConfirmOptions() {
+  if (exportScope.value === 'branch') {
+    // Load branches and go to branch picker
+    exportSelectionStep.value = 'branch'
+    isLoadingExportLeaves.value = true
+    selectedExportLeafId.value = null
+    try {
+      exportLeaves.value = await getConversationLeaves(selectedExportConversationId.value!)
+    } catch (error) {
+      console.error('Failed to load branches:', error)
+      exportLeaves.value = []
+    } finally {
+      isLoadingExportLeaves.value = false
+    }
+  } else {
+    // Export full conversation directly
+    await performSelectionExport()
+  }
+}
+
+// Go back one step in the export selection dialog
+function exportSelectionBack() {
+  if (exportSelectionStep.value === 'branch') {
+    exportSelectionStep.value = 'options'
+    selectedExportLeafId.value = null
+    exportLeaves.value = []
+  } else if (exportSelectionStep.value === 'options') {
+    exportSelectionStep.value = 'conversation'
+  }
+}
+
+// Perform the actual export based on selections
+async function performSelectionExport() {
+  if (!selectedExportConversationId.value) return
+  if (exportScope.value === 'branch' && !selectedExportLeafId.value) return
+
+  // Check for encryption warning
+  if (encryptionStore.encryptionEnabled) {
+    const proceed = confirm(
+      'Your data is encrypted. The export file will contain decrypted data (readable by anyone). Continue?'
+    )
+    if (!proceed) return
+  }
+
+  isExportingSelection.value = true
+  exportSelectionSuccess.value = false
+  const title = selectedExportConversation.value?.title || 'conversation'
+
+  try {
+    if (exportFormat.value === 'json') {
+      const data = await exportData({ conversationId: selectedExportConversationId.value })
+      const json = serializeExport(data)
+      const safeName = title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)
+      const filename = `bonsai-${safeName}-${new Date().toISOString().split('T')[0]}.json`
+      downloadFile(json, filename)
+    } else {
+      // Markdown
+      let markdown: string
+      if (exportScope.value === 'branch') {
+        markdown = await exportBranchAsMarkdown({
+          conversationId: selectedExportConversationId.value,
+          leafMessageId: selectedExportLeafId.value!,
+        })
+      } else {
+        markdown = await exportConversationAsMarkdown(selectedExportConversationId.value)
+      }
+      const filename = generateMarkdownFilename(title, exportScope.value === 'branch')
+      downloadMarkdownFile(markdown, filename)
+    }
+
+    exportSelectionSuccess.value = true
+    setTimeout(() => {
+      exportSelectionSuccess.value = false
+      closeExportSelection()
+    }, 1500)
+  } catch (error) {
+    console.error('Export failed:', error)
+    alert('Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'))
+  } finally {
+    isExportingSelection.value = false
   }
 }
 
@@ -394,6 +656,7 @@ async function handleChangePassphrase() {
 
 function handleLock() {
   encryptionStore.lock()
+  closeSettings()
   router.push('/')
 }
 
@@ -439,6 +702,7 @@ async function handleGenerateDataset() {
 
 function goToGeneratedConversation() {
   if (generationResult.value) {
+    closeSettings()
     router.push(`/conversation/${generationResult.value.conversationId}`)
   }
 }
@@ -485,17 +749,18 @@ function formatBytes(bytes: number): string {
 </script>
 
 <template>
-  <div class="settings-page" :class="{ 'day-mode': themeStore.isDayMode }">
-    <!-- Grid Background -->
-    <GridBackground />
-
-    <!-- Top Navigation Bar -->
-    <TopNavBar />
-
-    <!-- Content -->
+  <div class="settings-view" :class="{ 'day-mode': themeStore.isDayMode }">
     <main class="settings-content">
-      <!-- Page Title -->
-      <h1 class="page-title">Settings</h1>
+      <!-- Header with title and close button -->
+      <div class="settings-header">
+        <h1 class="page-title">Settings</h1>
+        <button class="settings-close-btn" title="Close settings" @click="emit('close')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
 
       <!-- Success Toast -->
       <div
@@ -516,7 +781,8 @@ function formatBytes(bytes: number): string {
         <h2 class="card-title">NanoGPT API Key</h2>
         <p class="card-description">
           Your API key is stored locally in your browser and is never sent to any server except NanoGPT.
-          Get your API key from <a href="https://nano-gpt.com" target="_blank" rel="noopener" class="link">nano-gpt.com</a>.
+          Get your API key from <a href="https://nano-gpt.com/r/BnfJfghE" target="_blank" rel="noopener" class="link">nano-gpt.com</a> (affiliate link - helps support Bonsai)
+          or use the <a href="https://nano-gpt.com" target="_blank" rel="noopener" class="link">original link</a>.
         </p>
 
         <!-- Existing Key Display -->
@@ -561,14 +827,23 @@ function formatBytes(bytes: number): string {
 
           <div v-if="isEditing || !hasKey" class="input-group">
             <label class="input-label">Enter your NanoGPT API key</label>
-            <input
-              v-model="apiKeyInput"
-              type="password"
-              placeholder="nano-..."
-              class="input"
-              data-testid="api-key-input"
-              @keyup.enter="saveApiKey"
-            />
+            <div class="input-with-toggle">
+              <input
+                v-model="apiKeyInput"
+                :type="showApiKeyInput ? 'text' : 'password'"
+                placeholder="nano-..."
+                class="input"
+                data-testid="api-key-input"
+                @keyup.enter="saveApiKey"
+              />
+              <button
+                type="button"
+                class="toggle-visibility"
+                @click="showApiKeyInput = !showApiKeyInput"
+              >
+                {{ showApiKeyInput ? 'Hide' : 'Show' }}
+              </button>
+            </div>
           </div>
 
           <div class="button-group">
@@ -594,6 +869,88 @@ function formatBytes(bytes: number): string {
           </div>
           <div v-if="saveStatus === 'error'" class="status-message error">
             ✗ Failed to save API key
+          </div>
+        </div>
+      </section>
+
+      <!-- Color Palette Section -->
+      <section class="settings-card" data-testid="color-palette-section">
+        <button
+          class="collapsible-header"
+          @click="showPalettes = !showPalettes"
+        >
+          <h2 class="card-title">Color Palette</h2>
+          <svg
+            class="collapse-chevron"
+            :class="{ expanded: showPalettes }"
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        <p class="card-description">
+          Choose your preferred color scheme for day and night modes.
+        </p>
+
+        <div v-if="showPalettes" class="collapsible-content">
+          <!-- Day Mode Palettes -->
+          <div class="palette-section">
+            <h3 class="palette-mode-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
+              </svg>
+              Day Mode
+            </h3>
+            <div class="palette-grid">
+              <button
+                v-for="palette in DAY_PALETTES"
+                :key="palette.id"
+                class="palette-option"
+                :class="{ active: themeStore.dayPalette === palette.id }"
+                @click="themeStore.setDayPalette(palette.id as DayPalette)"
+              >
+                <div class="palette-preview">
+                  <div class="palette-color primary" :style="{ background: palette.primary }"></div>
+                  <div class="palette-color accent" :style="{ background: palette.accent }"></div>
+                </div>
+                <span class="palette-name">{{ palette.name }}</span>
+                <span v-if="themeStore.dayPalette === palette.id" class="palette-check">✓</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Night Mode Palettes -->
+          <div class="palette-section">
+            <h3 class="palette-mode-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clip-rule="evenodd" />
+              </svg>
+              Night Mode
+            </h3>
+            <div class="palette-grid">
+              <button
+                v-for="palette in NIGHT_PALETTES"
+                :key="palette.id"
+                class="palette-option"
+                :class="{ active: themeStore.nightPalette === palette.id }"
+                @click="themeStore.setNightPalette(palette.id as NightPalette)"
+              >
+                <div class="palette-preview">
+                  <div class="palette-color primary" :style="{ background: palette.primary }"></div>
+                  <div class="palette-color accent" :style="{ background: palette.accent }"></div>
+                </div>
+                <span class="palette-name">{{ palette.name }}</span>
+                <span v-if="themeStore.nightPalette === palette.id" class="palette-check">✓</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -666,27 +1023,6 @@ function formatBytes(bytes: number): string {
         </div>
       </section>
 
-      <!-- Model Information -->
-      <section class="settings-card">
-        <h2 class="card-title">Available Models</h2>
-        <p class="card-description">
-          These models are available through NanoGPT. The default model for new conversations is <strong>{{ DEFAULT_MODEL }}</strong>.
-        </p>
-        <div class="model-list">
-          <div
-            v-for="model in AVAILABLE_MODELS"
-            :key="model.id"
-            class="model-item"
-          >
-            <div class="model-info">
-              <span class="model-name">{{ model.name }}</span>
-              <span class="model-id">{{ model.id }}</span>
-            </div>
-            <span v-if="model.supportsWebSearch" class="model-badge">🔍 Web search</span>
-          </div>
-        </div>
-      </section>
-
       <!-- Data & Storage Section -->
       <section class="settings-card" data-testid="data-storage-section">
         <h2 class="card-title">Data & Storage</h2>
@@ -710,19 +1046,32 @@ function formatBytes(bytes: number): string {
         <div class="section-group">
           <h3 class="section-title">Export & Import</h3>
 
-          <!-- Export Button -->
+          <!-- Export All Button -->
           <div class="action-row">
             <button
               class="btn btn-primary"
-              :disabled="isExporting"
               data-testid="export-all-btn"
               @click="handleExportAll"
             >
-              <span v-if="isExporting" class="spinner">⏳</span>
-              <span v-else>📤</span>
-              {{ isExporting ? 'Exporting...' : 'Export All Data' }}
+              📤 Export All Data
             </button>
-            <span v-if="exportSuccess" class="status-message success">✓ Downloaded</span>
+            <p class="action-hint">
+              Export every conversation as JSON or Markdown.
+            </p>
+          </div>
+
+          <!-- Export Selection Button -->
+          <div class="action-row">
+            <button
+              class="btn btn-secondary"
+              data-testid="export-selection-btn"
+              @click="openExportSelection"
+            >
+              📤 Export Selection
+            </button>
+            <p class="action-hint">
+              Export a conversation or branch as JSON or Markdown.
+            </p>
           </div>
 
           <!-- Import Button -->
@@ -806,6 +1155,53 @@ function formatBytes(bytes: number): string {
         </div>
       </section>
 
+      <!-- Sync (Coming Soon) -->
+      <section class="settings-card" data-testid="sync-section">
+        <h2 class="card-title">Sync (Coming Soon)</h2>
+        <p class="section-description">
+          Cloud sync is not yet available. Operations are logged locally for future sync support.
+        </p>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Pending Operations</span>
+            <code class="info-value" data-testid="sync-pending-count">{{ syncPendingCount }}</code>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Client ID</span>
+            <code class="info-value" data-testid="sync-client-id">{{ syncClientId || '—' }}</code>
+          </div>
+        </div>
+
+        <div v-if="syncLatestTypes.length > 0" class="latest-ops">
+          <span class="info-label">Latest Operations</span>
+          <div class="ops-list" data-testid="sync-latest-ops">
+            <code v-for="(opType, index) in syncLatestTypes" :key="index" class="op-type-badge">
+              {{ opType }}
+            </code>
+          </div>
+        </div>
+
+        <div class="button-row" style="margin-top: 0.75rem;">
+          <button
+            class="btn btn-secondary"
+            data-testid="refresh-sync-btn"
+            :disabled="isSyncLoading"
+            @click="refreshSyncDiagnostics"
+          >
+            {{ isSyncLoading ? 'Refreshing…' : 'Refresh' }}
+          </button>
+          <button
+            v-if="isDev"
+            class="btn btn-secondary"
+            data-testid="mark-all-acked-btn"
+            @click="markAllOpsAcked"
+          >
+            Mark All Acknowledged
+          </button>
+        </div>
+      </section>
+
       <!-- Danger Zone -->
       <section class="settings-card danger-zone" data-testid="danger-zone-section">
         <h2 class="card-title danger">⚠️ Danger Zone</h2>
@@ -858,6 +1254,105 @@ function formatBytes(bytes: number): string {
               Reset All
             </button>
           </div>
+        </div>
+      </section>
+
+      <!-- Tutorial Section -->
+      <section class="settings-card" data-testid="tutorial-section">
+        <h2 class="card-title">Tutorial</h2>
+        <p class="card-description">
+          Learn how to use Bonsai with interactive guided tutorials.
+        </p>
+
+        <div class="section-group">
+          <div class="action-row">
+            <div class="action-info">
+              <div class="action-title">Quick Setup</div>
+              <div class="action-description">A 3-step guide: add your API key, create a conversation, and send your first message.</div>
+            </div>
+            <button
+              class="btn btn-secondary"
+              data-testid="start-quick-setup-btn"
+              @click="startQuickSetup"
+            >
+              Start
+            </button>
+          </div>
+          <div class="action-row">
+            <div class="action-info">
+              <div class="action-title">Full Tour</div>
+              <div class="action-description">A comprehensive walkthrough of all Bonsai features including branching, context control, and view modes.</div>
+            </div>
+            <button
+              class="btn btn-primary"
+              data-testid="start-full-tour-btn"
+              @click="startFullTour"
+            >
+              Start Tour
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Support Section -->
+      <section class="settings-card" data-testid="support-section">
+        <h2 class="card-title">Support</h2>
+        <p class="card-description">
+          Tools for troubleshooting and getting help.
+        </p>
+
+        <div class="section-group">
+          <div class="action-row">
+            <div class="action-info">
+              <div class="action-title">Copy Debug Info</div>
+              <div class="action-description">Copy non-sensitive diagnostic information to your clipboard for support purposes. Does not include API keys or conversation content.</div>
+            </div>
+            <button
+              class="btn btn-secondary"
+              :class="{ 'btn-success': debugInfoCopied }"
+              :disabled="isCopyingDebugInfo"
+              data-testid="copy-debug-info"
+              @click="copyDebugInfo"
+            >
+              <span v-if="isCopyingDebugInfo">Copying...</span>
+              <span v-else-if="debugInfoCopied">Copied!</span>
+              <span v-else>Copy to Clipboard</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Feedback Section -->
+        <div class="section-group">
+          <h3 class="section-title">Feedback</h3>
+          <p class="action-hint" style="margin-bottom: 0.75rem">
+            Help us improve Bonsai by reporting issues or suggesting features.
+          </p>
+
+          <div class="feedback-buttons">
+            <button
+              class="btn btn-secondary feedback-btn"
+              data-testid="report-bug-btn"
+              @click="openFeedbackUrl('bug')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              Report Bug
+            </button>
+            <button
+              class="btn btn-secondary feedback-btn"
+              data-testid="request-feature-btn"
+              @click="openFeedbackUrl('feature')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
+              </svg>
+              Request Feature
+            </button>
+          </div>
+          <p class="feedback-note">
+            This will open GitHub in a new tab. Your debug info will be prefilled (no API keys or private content included).
+          </p>
         </div>
       </section>
 
@@ -1067,6 +1562,65 @@ function formatBytes(bytes: number): string {
       </section>
     </main>
 
+    <!-- Export All Data Dialog -->
+    <div
+      v-if="showExportAllDialog"
+      class="dialog-overlay"
+      data-testid="export-all-dialog"
+      @click.self="closeExportAllDialog"
+    >
+      <div class="dialog-content">
+        <h2 class="dialog-title">📤 Export All Data</h2>
+        <p class="dialog-text">
+          Choose a format for the export:
+        </p>
+
+        <div class="export-option-group">
+          <label class="option-group-label">Format</label>
+          <div class="option-buttons">
+            <button
+              class="option-btn"
+              :class="{ active: exportAllFormat === 'json' }"
+              @click="exportAllFormat = 'json'"
+            >
+              <span class="option-icon">{ }</span>
+              <span class="option-label">JSON</span>
+              <span class="option-desc">Importable backup</span>
+            </button>
+            <button
+              class="option-btn"
+              :class="{ active: exportAllFormat === 'markdown' }"
+              @click="exportAllFormat = 'markdown'"
+            >
+              <span class="option-icon">#</span>
+              <span class="option-label">Markdown</span>
+              <span class="option-desc">Readable text</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Success message -->
+        <div v-if="exportSuccess" class="status-indicator success" style="margin-top: 0.5rem;">
+          <span>✓</span>
+          <span>Downloaded!</span>
+        </div>
+
+        <div class="dialog-actions">
+          <button class="btn btn-ghost" @click="closeExportAllDialog">
+            Cancel
+          </button>
+          <button
+            :disabled="isExporting"
+            class="btn btn-primary"
+            data-testid="confirm-export-all-btn"
+            @click="performExportAll"
+          >
+            {{ isExporting ? 'Exporting...' : 'Export' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Reset Confirmation Dialog -->
     <div
       v-if="showResetDialog"
@@ -1226,6 +1780,196 @@ function formatBytes(bytes: number): string {
           >
             {{ isImporting ? 'Importing...' : 'Import Data' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Selection Dialog -->
+    <div
+      v-if="showExportSelection"
+      class="dialog-overlay"
+      data-testid="export-selection-dialog"
+      @click.self="closeExportSelection"
+    >
+      <div class="dialog-content">
+        <h2 class="dialog-title">📤 Export Selection</h2>
+
+        <!-- Step 1: Pick conversation -->
+        <template v-if="exportSelectionStep === 'conversation'">
+          <p class="dialog-text">
+            Select a conversation to export:
+          </p>
+
+          <div v-if="isLoadingExportConversations" class="loading-state">
+            <span class="spinner">⏳</span> Loading conversations...
+          </div>
+
+          <div v-else-if="exportConversations.length === 0" class="empty-state">
+            <p>No conversations found.</p>
+          </div>
+
+          <div v-else class="conversation-list">
+            <label
+              v-for="conv in exportConversations"
+              :key="conv.id"
+              class="conversation-item"
+              :class="{ selected: selectedExportConversationId === conv.id }"
+            >
+              <input
+                v-model="selectedExportConversationId"
+                type="radio"
+                name="exportConversation"
+                :value="conv.id"
+                class="conversation-radio"
+              />
+              <div class="conversation-info">
+                <span class="conversation-title">{{ conv.title || 'Untitled' }}</span>
+                <span class="conversation-date">{{ new Date(conv.updatedAt).toLocaleDateString() }}</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="closeExportSelection">
+              Cancel
+            </button>
+            <button
+              :disabled="!selectedExportConversationId"
+              class="btn btn-primary"
+              data-testid="export-selection-next-btn"
+              @click="exportSelectionNext"
+            >
+              Next
+            </button>
+          </div>
+        </template>
+
+        <!-- Step 2: Pick format and scope -->
+        <template v-if="exportSelectionStep === 'options'">
+          <p class="dialog-text">
+            Exporting <strong>{{ selectedExportConversation?.title || 'Untitled' }}</strong>
+          </p>
+
+          <!-- Format selection -->
+          <div class="export-option-group">
+            <label class="option-group-label">Format</label>
+            <div class="option-buttons">
+              <button
+                class="option-btn"
+                :class="{ active: exportFormat === 'json' }"
+                @click="exportFormat = 'json'"
+              >
+                <span class="option-icon">{ }</span>
+                <span class="option-label">JSON</span>
+                <span class="option-desc">Importable backup</span>
+              </button>
+              <button
+                class="option-btn"
+                :class="{ active: exportFormat === 'markdown' }"
+                @click="exportFormat = 'markdown'"
+              >
+                <span class="option-icon">#</span>
+                <span class="option-label">Markdown</span>
+                <span class="option-desc">Readable text</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Scope selection -->
+          <div class="export-option-group">
+            <label class="option-group-label">Scope</label>
+            <div class="option-buttons">
+              <button
+                class="option-btn"
+                :class="{ active: exportScope === 'conversation' }"
+                @click="exportScope = 'conversation'"
+              >
+                <span class="option-icon">🌳</span>
+                <span class="option-label">Entire Conversation</span>
+                <span class="option-desc">All branches included</span>
+              </button>
+              <button
+                class="option-btn"
+                :class="{ active: exportScope === 'branch' }"
+                @click="exportScope = 'branch'"
+              >
+                <span class="option-icon">🌿</span>
+                <span class="option-label">Single Branch</span>
+                <span class="option-desc">One root-to-leaf path</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="exportSelectionBack">
+              Back
+            </button>
+            <button
+              class="btn btn-primary"
+              data-testid="export-selection-confirm-btn"
+              @click="exportSelectionConfirmOptions"
+            >
+              {{ exportScope === 'branch' ? 'Next' : 'Export' }}
+            </button>
+          </div>
+        </template>
+
+        <!-- Step 3: Pick branch (only for scope=branch) -->
+        <template v-if="exportSelectionStep === 'branch'">
+          <p class="dialog-text">
+            Select a branch from
+            <strong>{{ selectedExportConversation?.title || 'Untitled' }}</strong>:
+          </p>
+
+          <div v-if="isLoadingExportLeaves" class="loading-state">
+            <span class="spinner">⏳</span> Loading branches...
+          </div>
+
+          <div v-else-if="exportLeaves.length === 0" class="empty-state">
+            <p>No branches found in this conversation.</p>
+          </div>
+
+          <div v-else class="conversation-list">
+            <label
+              v-for="leaf in exportLeaves"
+              :key="leaf.id"
+              class="conversation-item"
+              :class="{ selected: selectedExportLeafId === leaf.id }"
+            >
+              <input
+                v-model="selectedExportLeafId"
+                type="radio"
+                name="exportLeaf"
+                :value="leaf.id"
+                class="conversation-radio"
+              />
+              <div class="conversation-info">
+                <span v-if="leaf.branchTitle" class="conversation-title">{{ leaf.branchTitle }}</span>
+                <span v-else class="conversation-title branch-preview">{{ leaf.contentPreview }}</span>
+                <span class="conversation-date">{{ leaf.depth }} messages deep · {{ leaf.role }}</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="exportSelectionBack">
+              Back
+            </button>
+            <button
+              :disabled="!selectedExportLeafId || isExportingSelection"
+              class="btn btn-primary"
+              data-testid="export-selection-export-btn"
+              @click="performSelectionExport"
+            >
+              {{ isExportingSelection ? 'Exporting...' : 'Export' }}
+            </button>
+          </div>
+        </template>
+
+        <!-- Success message (shown over any step) -->
+        <div v-if="exportSelectionSuccess" class="status-indicator success" style="margin-top: 1rem;">
+          <span>✓</span>
+          <span>Downloaded!</span>
         </div>
       </div>
     </div>
@@ -1404,20 +2148,47 @@ function formatBytes(bytes: number): string {
 </template>
 
 <style scoped>
-.settings-page {
-  min-height: 100vh;
-  padding-top: 60px; /* Account for fixed navbar */
-  background: var(--bg-primary);
+.settings-view {
   color: var(--text-primary);
-  transition: background 0.4s ease, color 0.4s ease;
+  transition: color 0.4s ease;
 }
 
-/* Page Title */
+/* Header */
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .page-title {
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 1.5rem;
+  margin: 0;
+}
+
+.settings-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.settings-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--overlay-light);
+}
+
+.settings-close-btn svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 /* Content */
@@ -1586,7 +2357,7 @@ function formatBytes(bytes: number): string {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay-light);
   color: var(--text-primary);
 }
 
@@ -1596,13 +2367,13 @@ function formatBytes(bytes: number): string {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #ef5350;
+  filter: brightness(1.1);
 }
 
 .btn-danger-outline {
   background: transparent;
   color: var(--error);
-  border-color: rgba(248, 113, 113, 0.4);
+  border-color: var(--error);
 }
 
 .btn-danger-outline:hover:not(:disabled) {
@@ -1628,9 +2399,50 @@ function formatBytes(bytes: number): string {
   flex-wrap: wrap;
 }
 
+/* Feedback Section */
+.feedback-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.feedback-btn {
+  flex: 1;
+  min-width: 140px;
+}
+
+.btn-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.feedback-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 /* Inputs */
 .input-group {
   margin-bottom: 0.75rem;
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-toggle .input {
+  padding-right: 3.5rem;
+}
+
+.input-with-toggle .toggle-visibility {
+  position: absolute;
+  right: 0.75rem;
+  margin-left: 0;
 }
 
 .input-label {
@@ -1664,7 +2476,7 @@ function formatBytes(bytes: number): string {
 
 .input.danger:focus {
   border-color: var(--error);
-  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.1);
+  box-shadow: 0 0 0 3px var(--error-bg);
 }
 
 /* Form */
@@ -1707,19 +2519,19 @@ function formatBytes(bytes: number): string {
 
 .alert-success {
   background: var(--success-bg);
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  border: 1px solid var(--success);
   color: var(--success);
 }
 
 .alert-warning {
   background: var(--warning-bg);
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  border: 1px solid var(--warning);
   color: var(--warning);
 }
 
 .alert-error {
   background: var(--error-bg);
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  border: 1px solid var(--error);
   color: var(--error);
 }
 
@@ -1733,44 +2545,6 @@ function formatBytes(bytes: number): string {
 .security-note {
   font-size: 0.75rem;
   color: var(--text-muted);
-}
-
-/* Model List */
-.model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.model-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
-  padding: 0.625rem 0.875rem;
-}
-
-.model-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.model-name {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.model-id {
-  font-size: 0.75rem;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-}
-
-.model-badge {
-  font-size: 0.75rem;
-  color: var(--accent);
 }
 
 /* Info Box */
@@ -1905,12 +2679,12 @@ function formatBytes(bytes: number): string {
 
 .issue-item.error {
   background: var(--error-bg);
-  color: #fca5a5;
+  color: var(--error);
 }
 
 .issue-item.warning {
   background: var(--warning-bg);
-  color: #fcd34d;
+  color: var(--warning);
 }
 
 .issue-id {
@@ -1925,7 +2699,7 @@ function formatBytes(bytes: number): string {
 
 /* Danger Zone */
 .danger-zone {
-  border-color: rgba(248, 113, 113, 0.3);
+  border-color: var(--error);
 }
 
 .danger-actions {
@@ -1944,7 +2718,7 @@ function formatBytes(bytes: number): string {
 }
 
 .danger-action.critical {
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  border: 1px solid var(--error);
 }
 
 .action-info {
@@ -2000,7 +2774,7 @@ function formatBytes(bytes: number): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay-dark);
   backdrop-filter: blur(4px);
   padding: 1rem;
 }
@@ -2069,7 +2843,7 @@ function formatBytes(bytes: number): string {
   border-radius: var(--radius-md);
   padding: 0.75rem;
   font-size: 0.875rem;
-  color: #fca5a5;
+  color: var(--error);
   max-height: 10rem;
   overflow-y: auto;
 }
@@ -2079,7 +2853,141 @@ function formatBytes(bytes: number): string {
   border-radius: var(--radius-md);
   padding: 0.75rem;
   font-size: 0.875rem;
-  color: #fca5a5;
+  color: var(--error);
+}
+
+/* Conversation Picker */
+.conversation-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.15s ease;
+}
+
+.conversation-item:last-child {
+  border-bottom: none;
+}
+
+.conversation-item:hover {
+  background: var(--bg-secondary);
+}
+
+.conversation-item.selected {
+  background: var(--bg-accent);
+}
+
+.conversation-radio {
+  flex-shrink: 0;
+}
+
+.conversation-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.conversation-title {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-title.branch-preview {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 0.8rem;
+}
+
+/* Export option groups */
+.export-option-group {
+  margin-bottom: 1rem;
+}
+
+.option-group-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.option-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+  text-align: center;
+}
+
+.option-btn:hover {
+  border-color: var(--border-color);
+  background: var(--bg-card-hover);
+}
+
+.option-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.2);
+  background: var(--bg-card-hover);
+}
+
+.option-icon {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.option-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.option-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.conversation-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.loading-state,
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
 }
 
 /* Utilities */
@@ -2108,7 +3016,7 @@ function formatBytes(bytes: number): string {
 
 /* Dev Tools Section */
 .dev-tools-section {
-  border-color: rgba(139, 92, 246, 0.3);
+  border-color: var(--border-color);
 }
 
 .config-group {
@@ -2145,12 +3053,12 @@ function formatBytes(bytes: number): string {
 
 .generation-result.success {
   background: var(--success-bg);
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  border: 1px solid var(--success);
 }
 
 .generation-result.error {
   background: var(--error-bg);
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  border: 1px solid var(--error);
 }
 
 .generation-result .result-header {
@@ -2235,25 +3143,159 @@ function formatBytes(bytes: number): string {
   font-size: 0.7rem;
 }
 
-/* ============================================================================= */
-/* DAY MODE */
-/* ============================================================================= */
-.day-mode {
-  --bg-primary: #fff8f0;
-  --bg-secondary: rgba(255, 248, 240, 0.85);
-  --bg-card: #fff;
-  --bg-card-hover: #fef7ed;
-  --text-primary: #2d2a26;
-  --text-secondary: #6b6560;
-  --text-muted: rgba(45, 42, 38, 0.6);
-  --accent: #c4956a;
-  --accent-rgb: 196, 149, 106;
-  --accent-hover: #b8865c;
-  --border-color: rgba(196, 149, 106, 0.5);
-  --border-subtle: rgba(196, 149, 106, 0.25);
-  --border-muted: rgba(0, 0, 0, 0.08);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+/* Collapsible header */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+}
+
+.collapsible-header:hover .collapse-chevron {
+  color: var(--text-primary);
+}
+
+.collapsible-header .card-title {
+  margin-bottom: 0;
+}
+
+.collapse-chevron {
+  color: var(--text-muted);
+  transition: transform 0.2s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.collapse-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  margin-top: 0.25rem;
+}
+
+/* Color Palette Section */
+.palette-section {
+  margin-bottom: 1.5rem;
+}
+
+.palette-section:last-child {
+  margin-bottom: 0;
+}
+
+.palette-mode-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+.palette-mode-title svg {
+  color: var(--accent);
+}
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+
+.palette-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  font-family: var(--font-sans);
+}
+
+.palette-option:hover {
+  border-color: var(--border-color);
+  background: var(--bg-card-hover);
+}
+
+.palette-option.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.2);
+}
+
+.palette-preview {
+  display: flex;
+  width: 100%;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.palette-color {
+  flex: 1;
+}
+
+.palette-color.primary {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.palette-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.palette-check {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Sync diagnostics */
+.section-description {
+  color: var(--text-secondary, #9ca3af);
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.latest-ops {
+  margin-top: 0.5rem;
+}
+
+.ops-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.op-type-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  background: var(--bg-tertiary, #374151);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>
