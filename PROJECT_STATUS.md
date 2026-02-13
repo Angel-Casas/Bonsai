@@ -21,8 +21,8 @@
 - Optional encryption later (passphrase-based).
 
 ## Current Date / Context
-- Today: 2026-01-31
-- Notes: Milestone 11 complete. Performance + Scalability features implemented including virtual scrolling, tree optimization, search caching, encryption caching, and large dataset dev tools.
+- Today: 2026-02-13
+- Notes: Milestone 16 complete. Sync-ready client architecture with append-only ops log, encryption at rest, and SyncAdapter abstraction.
 
 ## Definition of Done (Green Bar Rule)
 A milestone is **not complete** unless:
@@ -290,6 +290,86 @@ Notes / decisions:
 - Unit tests: 53 new tests (23 for dataset generator, 30 for search cache)
 - E2e tests: 5 new tests for large dataset handling
 
+### Milestone 13 — Public Launch Polish
+Status: ✅ Done
+- [x] First-run guardrails: API key missing guidance with disabled send button and status message
+- [x] First-run guardrails: "Set API key now" button appears on auth errors (401/403)
+- [x] First-run guardrails: Deep search cost warning banner
+- [x] Context clarity: Context summary pill near composer
+- [x] Context clarity: "Sent Context" viewer for past messages (SentContextViewer component)
+- [x] Offline UX: Disable send button when offline with status message
+- [x] Offline UX: Handle streaming abort gracefully
+- [x] Supportability: "Copy Debug Info" button in Settings
+- [x] Supportability: Debug info excludes sensitive data (API keys, content, passphrases)
+- [x] Unit tests: debugInfo utility tests (14 tests), SentContextViewer tests (6 tests)
+- [x] E2E tests: public-launch-polish.spec.ts (12 tests)
+Notes / decisions:
+- **Fail-fast API key check**: Send button disabled when no API key configured. Status message shows "API key required" with clear guidance. This prevents confusing error states for new users.
+- **Auth error flow**: When API call returns 401/403, error banner shows "Set API key now" button that navigates directly to Settings. Includes link to NanoGPT for obtaining a key.
+- **Deep search warning**: Amber banner appears when deep search preset is selected: "Deep search is slower and more expensive than standard search".
+- **Context summary pill**: Shows near composer with format "Context: X path • Y pinned • Z excluded • anchored". Only visible when context config is active.
+- **SentContextViewer**: Modal component showing exact context sent with a past message. Loads from `resolvedContextMessageIds` snapshot in PromptContextConfig. Read-only for trust/debugging.
+- **Offline detection**: Uses `useOnlineStatus` composable for reactive online/offline state. Send button disabled with "Cannot send while offline" tooltip.
+- **Debug info collection**: `collectDebugInfo()` gathers app version, DB info, encryption state, counts, service worker status, and browser info. `validateNoSecrets()` ensures no sensitive patterns in output.
+- **Test approach**: E2E tests verify disabled button state instead of triggering errors by clicking. Auth error tests use invalid API key to trigger actual 401/403 responses.
+
+### Milestone 14 — User Feedback Funnel
+Status: ✅ Done
+- [x] GitHub issue templates: Bug report template with privacy checklist
+- [x] GitHub issue templates: Feature request template with privacy checklist
+- [x] GitHub issue templates: config.yml to disable blank issues, link to Discussions
+- [x] In-app feedback: "Report Bug" button in Settings (data-testid="report-bug-btn")
+- [x] In-app feedback: "Request Feature" button in Settings (data-testid="request-feature-btn")
+- [x] Feedback URLs prefilled with privacy warning and debug info
+- [x] Privacy safeguards: validateNoSecrets() ensures no sensitive data in URLs
+- [x] URL length handling: Truncates debug info if URL would exceed limits
+- [x] Unit tests: feedbackUrl.test.ts (13 tests)
+- [x] E2E tests: feedback.spec.ts (6 tests)
+Notes / decisions:
+- **URL builder approach**: Created `src/utils/feedbackUrl.ts` with `buildFeedbackUrl()` function that constructs GitHub issue URLs with proper encoding and content prefilling.
+- **Privacy safeguards**: Body content is validated with `validateNoSecrets()` before including in URL. If validation fails, falls back to minimal URL without prefilled body.
+- **URL length limits**: GitHub has practical URL limits (~8000 chars). We stay conservative at 4000 chars max, truncating debug info if needed with instruction to paste full output from "Copy Debug Info".
+- **Issue templates**: Using YAML format (.yml) for structured form-based templates. Required privacy checkboxes ensure users acknowledge they haven't included sensitive data.
+- **Template selection**: URLs include `template=bug_report.yml` or `template=feature_request.yml` query param to auto-select the correct template.
+- **New tab behavior**: Feedback buttons open GitHub in a new tab with `noopener,noreferrer` for security.
+
+### Milestone 15 — Release-Candidate Readiness + CI Hardening
+Status: ✅ Done
+- [x] CI gates: skipped tests fail the build (static check + runtime detection)
+- [x] Static check script: `scripts/check-no-skip.sh` detects hard-coded `.skip` and `.only`
+- [x] Runtime skip detection: `scripts/check-e2e-no-skip.js` parses Playwright JSON report
+- [x] Playwright config: Zero retries for determinism (tests must be stable)
+- [x] Enhanced failure artifacts: trace, screenshot, video on failure
+- [x] Node version standardization: `.nvmrc` with Node 20, `engines` field in package.json
+- [x] CI workflow updated: `node-version-file: '.nvmrc'`, skip checks, artifacts always uploaded
+- [x] New npm scripts: `test:e2e:ci` and `check:no-skip`
+Notes / decisions:
+- **Skip detection philosophy**: Hard-coded skips (test.skip('name'...)) are forbidden in CI. Conditional skips (test.skip() inside test body) are allowed for environment-specific tests (e.g., dev tools only visible in dev mode).
+- **Determinism via zero retries**: retries: 0 in playwright.config.ts ensures tests must pass reliably. Flaky tests surface immediately for fixing.
+- **Failure artifacts**: trace, screenshot, video retained only on failure to aid debugging while keeping storage minimal for passing runs.
+- **JSON reporter for runtime detection**: Playwright JSON report enables post-run analysis of actual test outcomes (skipped/passed/failed) beyond static code analysis.
+- **Always upload artifacts**: Changed `if: failure()` to `if: always()` so Playwright report is available even on success for debugging purposes.
+
+### Milestone 16 — Sync-Ready Client Architecture
+Status: ✅ Done
+- [x] Append-only operations log in IndexedDB (syncOps table, schema v4)
+- [x] Op types: conversation.create/rename/delete, message.create/edit/deleteSubtree/createVariant, import.completed
+- [x] Ops emitted from store actions (fire-and-forget, non-blocking)
+- [x] Op payloads encrypted at rest when encryption enabled (AES-GCM, same service)
+- [x] SyncAdapter interface with LocalOnlySyncAdapter implementation
+- [x] Sync diagnostics section in Settings (pending count, latest ops, client ID)
+- [x] Deterministic ordering: createdAt ASC, id ASC tie-breaker
+- [x] Unit tests for opsService (21 tests: op CRUD, ordering, encryption)
+- [x] E2E test for sync diagnostics in Settings
+Notes / decisions:
+- **Op emission location**: Store actions (domain commands), not repositories (pure CRUD). Each store action maps 1:1 to a user-facing command.
+- **Encryption**: Full payload encrypted at rest via encryptContent/decryptContent. Same AES-GCM service used for messages.
+- **Import strategy**: Single `import.completed` op (Approach A) — server treats import as new baseline.
+- **Canonical ordering**: createdAt ASC, id ASC documented as canonical for future replay.
+- **Client ID**: UUID in localStorage at `bonsai:sync:clientId`, generated once per device.
+- **Non-blocking**: Op writes use `.catch(console.error)` — failures logged but don't block user actions.
+- **Schema**: syncOps table with indices on id, status, createdAt, [conversationId+createdAt].
+
 ### Post-MVP
 - (Future milestone ideas TBD)
 
@@ -335,6 +415,19 @@ Notes / decisions:
 - resolvedContextMessageIds?: string[] (snapshot of what was sent)
 - Indices: messageId (primary)
 
+### SyncOp (Milestone 16)
+- id: string (UUID)
+- createdAt: string (ISO)
+- conversationId: string | null (null for global ops like import)
+- type: OpType (conversation.create/rename/delete, message.create/edit/deleteSubtree/createVariant, import.completed)
+- payload: string (JSON; empty when encrypted)
+- payloadEnc?: { ciphertext, iv } | null (encrypted payload when encryption enabled)
+- status: 'pending' | 'acked' | 'failed'
+- clientId: string (stable device identifier from localStorage)
+- schemaVersion: number (starts at 1)
+- Indices: id (primary), status, createdAt, [conversationId+createdAt]
+- Canonical ordering: createdAt ASC, id ASC (tie-breaker)
+
 ---
 
 ## UI Architecture (Milestone 2)
@@ -373,6 +466,8 @@ Notes / decisions:
 - Unit tests (coverage): `npm run test:coverage`
 - E2E tests: `npm run test:e2e`
 - E2E tests (UI): `npm run test:e2e:ui`
+- E2E tests (CI): `npm run test:e2e:ci` — runs tests + checks for skipped tests
+- Check for skips: `npm run check:no-skip` — static check for .skip/.only in tests
 - Lint: `npm run lint`
 - Format: `npm run format`
 - Format check: `npm run format:check`
@@ -538,9 +633,9 @@ To update: change the `href` attribute on the nano-gpt.com link.
 ---
 
 ## Next Actions (agent should update each time)
-- Current milestone: Milestone 11 (complete) + Open Source Release Setup
+- Current milestone: Milestone 16 (complete) — Sync-Ready Client Architecture
 - Next 1–3 tasks:
-  1. Push to GitHub and verify CI/deploy workflows
-  2. Landing page: Select final variant based on user testing / preference
-  3. Post-MVP features (cloud sync, collaborative editing)
+  1. Build Bonsai Sync server (receives ops, broadcasts to clients)
+  2. Implement RemoteSyncAdapter (pushes ops to server, receives remote ops)
+  3. Conflict resolution UI for concurrent edits
 - Blocking issues: None
