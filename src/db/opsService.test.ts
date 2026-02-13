@@ -272,4 +272,44 @@ describe('opsService', () => {
       expect(stats.latestTypes).toContain('conversation.create');
     });
   });
+
+  // ==========================================================================
+  // Encryption at rest
+  // ==========================================================================
+
+  describe('encryption', () => {
+    it('encrypts op payload at rest when encryption is enabled', async () => {
+      const { enableEncryption, disableEncryption, isUnlocked } = await import('./encryption');
+
+      // Enable encryption with test passphrase
+      await enableEncryption('test-passphrase-12345', db);
+      expect(isUnlocked()).toBe(true);
+
+      try {
+        const op = await appendOp(
+          'message.create',
+          { messageId: 'm1', content: 'secret message' },
+          'conv-1',
+          db
+        );
+
+        // Stored version should be encrypted
+        const stored = await db.syncOps.get(op.id);
+        expect(stored).toBeTruthy();
+        expect(stored!.payload).toBe('');
+        expect(stored!.payloadEnc).toBeTruthy();
+        expect(stored!.payloadEnc!.ciphertext).toBeTruthy();
+        expect(stored!.payloadEnc!.iv).toBeTruthy();
+
+        // getPendingOps should decrypt transparently
+        const pending = await getPendingOps(undefined, db);
+        expect(pending).toHaveLength(1);
+        const payload = JSON.parse(pending[0]!.payload);
+        expect(payload.content).toBe('secret message');
+        expect(payload.messageId).toBe('m1');
+      } finally {
+        await disableEncryption('test-passphrase-12345', db);
+      }
+    });
+  });
 });
