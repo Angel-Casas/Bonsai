@@ -16,6 +16,7 @@ import type {
   Message,
   MessageRevision,
   PromptContextConfig,
+  SyncOp,
 } from './types';
 
 /**
@@ -40,6 +41,7 @@ export class BonsaiDatabase extends Dexie {
   messages!: Table<Message, string>;
   messageRevisions!: Table<MessageRevision, string>;
   promptContextConfigs!: Table<PromptContextConfig, string>;
+  syncOps!: Table<SyncOp, string>;
 
   constructor(databaseName: string = 'BonsaiDB') {
     super(databaseName);
@@ -107,6 +109,20 @@ export class BonsaiDatabase extends Dexie {
       promptContextConfigs: 'messageId',
     });
     // No upgrade needed - fields are optional and will be populated when encryption is enabled
+
+    /**
+     * Version 4 - Add syncOps table for append-only operations log
+     *
+     * New table for tracking all data-mutating operations.
+     * Canonical ordering: createdAt ASC, id ASC (tie-breaker).
+     */
+    this.version(4).stores({
+      conversations: 'id, createdAt, updatedAt',
+      messages: 'id, conversationId, parentId, [conversationId+createdAt], variantOfMessageId, deletedAt',
+      messageRevisions: 'id, messageId, createdAt',
+      promptContextConfigs: 'messageId',
+      syncOps: 'id, status, createdAt, [conversationId+createdAt]',
+    });
   }
 }
 
@@ -141,12 +157,34 @@ export async function deleteDatabase(name: string): Promise<void> {
 /**
  * Generate a UUID v4
  * Used for all entity IDs.
- * 
+ *
  * Note: In future, if we need deterministic IDs for testing,
  * this could be made injectable.
  */
 export function generateId(): string {
-  return crypto.randomUUID();
+  // Use native crypto.randomUUID if available (secure contexts, modern browsers)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  // Fallback using crypto.getRandomValues (broader support, including non-secure contexts)
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    // Set version (4) and variant (8, 9, a, or b) bits
+    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  // Last resort fallback using Math.random (not cryptographically secure)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 /**
