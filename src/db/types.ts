@@ -163,3 +163,47 @@ export type CreatePromptContextConfigInput = Omit<PromptContextConfig, 'resolved
   resolvedContextMessageIds?: string[];
 };
 export type UpdatePromptContextConfigInput = Partial<Omit<PromptContextConfig, 'messageId'>>;
+
+// ============================================================================
+// Sync Operations (Milestone 16)
+// ============================================================================
+
+/** Operation status for sync */
+export type OpStatus = 'pending' | 'acked' | 'failed';
+
+/** All supported operation types */
+export type OpType =
+  | 'conversation.create'
+  | 'conversation.rename'
+  | 'conversation.delete'
+  | 'message.create'
+  | 'message.edit'
+  | 'message.deleteSubtree'
+  | 'message.createVariant'
+  | 'import.completed';
+
+/**
+ * SyncOp — A single operation in the append-only operations log.
+ *
+ * Canonical ordering: createdAt ASC, then id ASC (tie-breaker).
+ */
+export interface SyncOp {
+  /** Unique identifier (UUID) */
+  id: string;
+  /** When the op was created (ISO 8601) */
+  createdAt: string;
+  /** Associated conversation (null for global ops like import) */
+  conversationId: string | null;
+  /** Operation type */
+  type: OpType;
+  /** JSON-serialized payload (plaintext; empty string when encrypted) */
+  payload: string;
+  /** Encrypted payload ciphertext (when encryption enabled) */
+  payloadEnc?: { ciphertext: string; iv: string } | null;
+  /** Sync status */
+  status: OpStatus;
+  /** Stable device/client identifier */
+  clientId: string;
+  /** Schema version of this op format (start at 1) */
+  schemaVersion: number;
+}
