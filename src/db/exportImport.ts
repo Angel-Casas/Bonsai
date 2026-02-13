@@ -35,6 +35,7 @@ import {
   encryptOptionalField,
   decryptOptionalField,
 } from './encryption';
+import { appendOp } from './opsService';
 
 // ============================================================================
 // Types
@@ -757,6 +758,13 @@ export async function importData(
       }
     );
 
+    // Emit sync op for import
+    appendOp('import.completed', {
+      conversationCount: result.imported.conversations,
+      messageCount: result.imported.messages,
+      mode: options.mode,
+    }).catch(console.error);
+
     result.success = true;
     return result;
   } catch (error) {
@@ -766,6 +774,334 @@ export async function importData(
       error: error instanceof Error ? error.message : 'Import failed',
     };
   }
+}
+
+// ============================================================================
+// Markdown Export Functions
+// ============================================================================
+
+/**
+ * Format a role name for markdown display
+ */
+function formatRole(role: string): string {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+/**
+ * Internal: load and decrypt messages for a conversation, returning the message map
+ */
+async function loadConversationMessages(
+  conversationId: string,
+  database: BonsaiDatabase
+): Promise<{ messageMap: Map<string, Message>; allMessages: Message[] }> {
+  const allMessages = await database.messages
+    .where('conversationId')
+    .equals(conversationId)
+    .toArray();
+
+  const messageMap = new Map<string, Message>();
+  for (const msg of allMessages) {
+    messageMap.set(msg.id, msg);
+  }
+
+  return { messageMap, allMessages };
+}
+
+/**
+ * Internal: walk from a message to root, returning the path in root→leaf order
+ */
+function walkToRoot(leafId: string, messageMap: Map<string, Message>): Message[] {
+  const path: Message[] = [];
+  let current = messageMap.get(leafId);
+  if (!current) return path;
+
+  while (current) {
+    path.unshift(current);
+    if (current.parentId === null) break;
+    current = messageMap.get(current.parentId);
+  }
+  return path;
+}
+
+/**
+ * Internal: format an array of messages as markdown lines
+ */
+async function formatMessagesAsMarkdown(
+  messages: Message[]
+): Promise<string[]> {
+  const lines: string[] = [];
+  for (const msg of messages) {
+    const decryptedContent = await decryptContent(msg.content, msg.contentEnc);
+    lines.push(`### ${formatRole(msg.role)}`);
+    lines.push('');
+    lines.push(decryptedContent);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  }
+  return lines;
+}
+
+/**
+ * Export a single branch (path from root to a leaf message) as a markdown string
+ *
+ * @param options - conversationId and leafMessageId identifying the branch
+ * @param database - Database instance (defaults to main DB)
+ * @returns Markdown string of the branch
+ */
+export async function exportBranchAsMarkdown(
+  options: { conversationId: string; leafMessageId: string },
+  database: BonsaiDatabase = defaultDb
+): Promise<string> {
+  if (isEncryptionEnabled() && isLocked()) {
+    throw new Error('Cannot export while locked. Please unlock with your passphrase first.');
+  }
+
+  const { conversationId, leafMessageId } = options;
+
+  const conversation = await database.conversations.get(conversationId);
+  if (!conversation) {
+    throw new Error(`Conversation not found: ${conversationId}`);
+  }
+
+  const decryptedTitle = await decryptContent(conversation.title, conversation.titleEnc);
+  const { messageMap } = await loadConversationMessages(conversationId, database);
+
+  const branchPath = walkToRoot(leafMessageId, messageMap);
+  if (branchPath.length === 0) {
+    throw new Error(`Message not found: ${leafMessageId}`);
+  }
+
+  const date = new Date().toISOString().split('T')[0];
+  const lines: string[] = [];
+  lines.push(`# ${decryptedTitle}`);
+  lines.push('');
+  lines.push(`> Exported from Bonsai on ${date}`);
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  lines.push(...await formatMessagesAsMarkdown(branchPath));
+
+  return lines.join('\n');
+}
+
+/**
+ * Export an entire conversation as markdown.
+ * Each branch (root-to-leaf path) is rendered as a separate section.
+ * If the conversation is linear (single branch), it exports as one flat document.
+ *
+ * @param conversationId - The conversation to export
+ * @param database - Database instance (defaults to main DB)
+ * @returns Markdown string of the full conversation
+ */
+export async function exportConversationAsMarkdown(
+  conversationId: string,
+  database: BonsaiDatabase = defaultDb
+): Promise<string> {
+  if (isEncryptionEnabled() && isLocked()) {
+    throw new Error('Cannot export while locked. Please unlock with your passphrase first.');
+  }
+
+  const conversation = await database.conversations.get(conversationId);
+  if (!conversation) {
+    throw new Error(`Conversation not found: ${conversationId}`);
+  }
+
+  const decryptedTitle = await decryptContent(conversation.title, conversation.titleEnc);
+  const { messageMap, allMessages } = await loadConversationMessages(conversationId, database);
+
+  // Find all leaf messages (not a parent of any other message)
+  const parentIds = new Set<string>();
+  for (const msg of allMessages) {
+    if (msg.parentId !== null) {
+      parentIds.add(msg.parentId);
+    }
+  }
+  const leaves = allMessages
+    .filter(msg => !parentIds.has(msg.id))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  const date = new Date().toISOString().split('T')[0];
+  const lines: string[] = [];
+  lines.push(`# ${decryptedTitle}`);
+  lines.push('');
+  lines.push(`> Exported from Bonsai on ${date}`);
+  lines.push('');
+
+  if (leaves.length <= 1) {
+    // Linear conversation - single flat section
+    const path = leaves.length === 1 ? walkToRoot(leaves[0].id, messageMap) : [];
+    lines.push('---');
+    lines.push('');
+    lines.push(...await formatMessagesAsMarkdown(path));
+  } else {
+    // Branched conversation - one section per branch
+    for (let i = 0; i < leaves.length; i++) {
+      const branchPath = walkToRoot(leaves[i].id, messageMap);
+      const branchLabel = findBranchLabel(branchPath) || `Branch ${i + 1}`;
+      lines.push(`## ${branchLabel}`);
+      lines.push('');
+      lines.push(...await formatMessagesAsMarkdown(branchPath));
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Export all conversations as a single markdown document.
+ * Each conversation is a top-level heading, with branches as sub-sections.
+ *
+ * @param database - Database instance (defaults to main DB)
+ * @returns Markdown string of all conversations
+ */
+export async function exportAllAsMarkdown(
+  database: BonsaiDatabase = defaultDb
+): Promise<string> {
+  if (isEncryptionEnabled() && isLocked()) {
+    throw new Error('Cannot export while locked. Please unlock with your passphrase first.');
+  }
+
+  const allConversations = await database.conversations.toArray();
+  // Sort by updatedAt descending (most recent first)
+  allConversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  const date = new Date().toISOString().split('T')[0];
+  const lines: string[] = [];
+  lines.push('# Bonsai Export');
+  lines.push('');
+  lines.push(`> Exported from Bonsai on ${date} · ${allConversations.length} conversation${allConversations.length !== 1 ? 's' : ''}`);
+  lines.push('');
+
+  for (const conv of allConversations) {
+    const decryptedTitle = await decryptContent(conv.title, conv.titleEnc);
+    const { messageMap, allMessages } = await loadConversationMessages(conv.id, database);
+
+    // Find leaves
+    const parentIds = new Set<string>();
+    for (const msg of allMessages) {
+      if (msg.parentId !== null) {
+        parentIds.add(msg.parentId);
+      }
+    }
+    const leaves = allMessages
+      .filter(msg => !parentIds.has(msg.id))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+    lines.push(`## ${decryptedTitle}`);
+    lines.push('');
+
+    if (leaves.length <= 1) {
+      const path = leaves.length === 1 ? walkToRoot(leaves[0].id, messageMap) : [];
+      lines.push(...await formatMessagesAsMarkdown(path));
+    } else {
+      for (let i = 0; i < leaves.length; i++) {
+        const branchPath = walkToRoot(leaves[i].id, messageMap);
+        const branchLabel = findBranchLabel(branchPath) || `Branch ${i + 1}`;
+        lines.push(`### ${branchLabel}`);
+        lines.push('');
+        lines.push(...await formatMessagesAsMarkdown(branchPath));
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Find the last (deepest) branchTitle on a root→leaf path.
+ * This gives the most specific label for the branch the leaf belongs to.
+ */
+function findBranchLabel(path: Message[]): string | null {
+  let label: string | null = null;
+  for (const msg of path) {
+    if (msg.branchTitle) {
+      label = msg.branchTitle;
+    }
+  }
+  return label;
+}
+
+/**
+ * Get leaf messages (branch tips) for a conversation.
+ * Each leaf represents a unique branch that can be exported.
+ *
+ * @param conversationId - The conversation to get leaves for
+ * @param database - Database instance (defaults to main DB)
+ * @returns Array of leaf messages with decrypted content preview
+ */
+export interface LeafInfo {
+  id: string;
+  role: string;
+  contentPreview: string;
+  depth: number;
+  /** The deepest branchTitle found on the path from root to this leaf, or null */
+  branchTitle: string | null;
+}
+
+export async function getConversationLeaves(
+  conversationId: string,
+  database: BonsaiDatabase = defaultDb
+): Promise<LeafInfo[]> {
+  if (isEncryptionEnabled() && isLocked()) {
+    throw new Error('Cannot read branches while locked. Please unlock with your passphrase first.');
+  }
+
+  const { messageMap, allMessages } = await loadConversationMessages(conversationId, database);
+
+  const parentIds = new Set<string>();
+  for (const msg of allMessages) {
+    if (msg.parentId !== null) {
+      parentIds.add(msg.parentId);
+    }
+  }
+
+  const leaves: LeafInfo[] = [];
+  for (const msg of allMessages) {
+    if (!parentIds.has(msg.id)) {
+      const path = walkToRoot(msg.id, messageMap);
+      const depth = path.length - 1;
+      const branchTitle = findBranchLabel(path);
+
+      const decryptedContent = await decryptContent(msg.content, msg.contentEnc);
+      const preview = decryptedContent.length > 80
+        ? decryptedContent.substring(0, 80) + '...'
+        : decryptedContent;
+
+      leaves.push({ id: msg.id, role: msg.role, contentPreview: preview, depth, branchTitle });
+    }
+  }
+
+  leaves.sort((a, b) => b.depth - a.depth);
+  return leaves;
+}
+
+/**
+ * Generate a filename for a markdown export
+ */
+export function generateMarkdownFilename(conversationTitle: string, isBranch?: boolean): string {
+  const date = new Date().toISOString().split('T')[0];
+  const sanitized = conversationTitle
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 50);
+  const prefix = isBranch ? 'bonsai-branch' : 'bonsai-export';
+  return `${prefix}-${date}-${sanitized}.md`;
+}
+
+/**
+ * Trigger a markdown file download in the browser
+ */
+export function downloadMarkdownFile(content: string, filename: string): void {
+  const blob = new Blob([content], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /**
