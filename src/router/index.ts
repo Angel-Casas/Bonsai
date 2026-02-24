@@ -20,9 +20,19 @@ const router = createRouter({
       props: true,
     },
     {
-      path: '/settings',
-      name: 'settings',
-      component: () => import('@/views/SettingsView.vue'),
+      path: '/auth/verify',
+      name: 'auth-verify',
+      component: () => import('@/views/AuthVerifyView.vue'),
+    },
+    {
+      path: '/auth/callback',
+      name: 'auth-callback',
+      component: () => import('@/views/AuthCallbackView.vue'),
+    },
+    {
+      path: '/subscription/success',
+      name: 'subscription-success',
+      component: () => import('@/views/SubscriptionSuccessView.vue'),
     },
   ],
 })
