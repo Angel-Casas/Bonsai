@@ -37,4 +37,9 @@ describe('Auth routes', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  it('GET /auth/google/callback rejects missing code', async () => {
+    const res = await app.request('/auth/google/callback')
+    expect(res.status).toBe(400)
+  })
 })
