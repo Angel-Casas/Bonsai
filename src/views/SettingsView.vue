@@ -42,6 +42,8 @@ import { openFeedbackUrl } from '@/utils/feedbackUrl'
 import { useTutorial } from '@/composables/useTutorial'
 import { getOpStats, getOrCreateClientId } from '@/db/opsService'
 import { LocalOnlySyncAdapter } from '@/db/syncAdapter'
+import { useAuthStore } from '@/stores/authStore'
+import { useSubscriptionStore } from '@/stores/subscriptionStore'
 
 const emit = defineEmits<{
   close: []
@@ -52,6 +54,11 @@ const { closeSettings } = useSettingsPanel()
 const encryptionStore = useEncryptionStore()
 const themeStore = useThemeStore()
 const tutorial = useTutorial()
+const authStore = useAuthStore()
+const subscriptionStore = useSubscriptionStore()
+const loginEmail = ref('')
+const loginSent = ref(false)
+const loginError = ref('')
 
 function startQuickSetup() {
   emit('close')
@@ -137,6 +144,7 @@ const exportSelectionSuccess = ref(false)
 
 // Sync diagnostics state
 const syncPendingCount = ref(0)
+const syncFailedCount = ref(0)
 const syncLatestTypes = ref<string[]>([])
 const syncClientId = ref('')
 const isSyncLoading = ref(false)
@@ -147,6 +155,7 @@ async function refreshSyncDiagnostics() {
   try {
     const stats = await getOpStats()
     syncPendingCount.value = stats.pendingCount
+    syncFailedCount.value = stats.failedCount
     syncLatestTypes.value = stats.latestTypes
     syncClientId.value = getOrCreateClientId()
   } finally {
@@ -157,6 +166,29 @@ async function refreshSyncDiagnostics() {
 async function markAllOpsAcked() {
   await syncAdapter.resetSyncState()
   await refreshSyncDiagnostics()
+}
+
+async function handleMagicLink() {
+  loginError.value = ''
+  try {
+    await authStore.requestMagicLink(loginEmail.value)
+    loginSent.value = true
+  } catch (e: unknown) {
+    loginError.value = e instanceof Error ? e.message : 'Failed to send'
+  }
+}
+
+function handleGoogleLogin() {
+  window.location.href = authStore.getGoogleOAuthUrl()
+}
+
+async function handleCheckout(plan: 'monthly' | 'yearly') {
+  try {
+    const url = await subscriptionStore.startCheckout(plan)
+    window.location.href = url
+  } catch (e: unknown) {
+    console.error('Checkout failed:', e)
+  }
 }
 
 // Check if API key exists
@@ -1155,17 +1187,97 @@ function formatBytes(bytes: number): string {
         </div>
       </section>
 
-      <!-- Sync (Coming Soon) -->
+      <!-- Account & Subscription -->
+      <section class="settings-card" data-testid="account-section">
+        <h2 class="card-title">Account</h2>
+
+        <!-- Not logged in -->
+        <template v-if="!authStore.isLoggedIn">
+          <p class="section-description">Sign in to enable cloud sync & backup.</p>
+
+          <div v-if="!loginSent" class="auth-form">
+            <div class="input-row">
+              <input
+                v-model="loginEmail"
+                type="email"
+                class="input"
+                placeholder="your@email.com"
+                data-testid="login-email"
+                @keyup.enter="handleMagicLink"
+              />
+              <button class="btn btn-primary" data-testid="magic-link-btn" @click="handleMagicLink">
+                Send magic link
+              </button>
+            </div>
+            <p v-if="loginError" class="error-text">{{ loginError }}</p>
+            <div class="divider-text"><span>or</span></div>
+            <button class="btn btn-secondary google-btn" @click="handleGoogleLogin">
+              Sign in with Google
+            </button>
+          </div>
+
+          <div v-else class="magic-link-sent">
+            <p>Check your email for the sign-in link.</p>
+            <button class="btn btn-secondary" @click="loginSent = false">Try again</button>
+          </div>
+        </template>
+
+        <!-- Logged in -->
+        <template v-else>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Email</span>
+              <code class="info-value">{{ authStore.user?.email }}</code>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Subscription</span>
+              <code class="info-value" :class="{ active: subscriptionStore.isActive }">
+                {{ subscriptionStore.isActive ? `${subscriptionStore.plan} — active` : 'None' }}
+              </code>
+            </div>
+            <div v-if="subscriptionStore.periodEnd" class="info-item">
+              <span class="info-label">Expires</span>
+              <code class="info-value">{{ new Date(subscriptionStore.periodEnd).toLocaleDateString() }}</code>
+            </div>
+          </div>
+
+          <!-- Subscribe / Renew -->
+          <div v-if="!subscriptionStore.isActive" class="plan-cards">
+            <button class="plan-card" @click="handleCheckout('monthly')">
+              <span class="plan-name">Monthly</span>
+              <span class="plan-price">$5/mo</span>
+            </button>
+            <button class="plan-card recommended" @click="handleCheckout('yearly')">
+              <span class="plan-badge">Save 20%</span>
+              <span class="plan-name">Yearly</span>
+              <span class="plan-price">$48/yr</span>
+            </button>
+          </div>
+
+          <div class="button-row" style="margin-top: 0.75rem;">
+            <button class="btn btn-secondary" @click="authStore.logout()">Sign out</button>
+          </div>
+        </template>
+      </section>
+
+      <!-- Sync -->
       <section class="settings-card" data-testid="sync-section">
-        <h2 class="card-title">Sync (Coming Soon)</h2>
-        <p class="section-description">
-          Cloud sync is not yet available. Operations are logged locally for future sync support.
+        <h2 class="card-title">Sync</h2>
+        <p v-if="!authStore.isLoggedIn || !subscriptionStore.isActive" class="section-description">
+          Cloud sync requires an active subscription. Operations are logged locally.
+        </p>
+        <p v-else class="section-description sync-active">
+          Cloud sync is active. Your conversations are being backed up.
         </p>
 
         <div class="info-grid">
           <div class="info-item">
             <span class="info-label">Pending Operations</span>
             <code class="info-value" data-testid="sync-pending-count">{{ syncPendingCount }}</code>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Failed Operations</span>
+            <code class="info-value" data-testid="sync-failed-count" :style="syncFailedCount > 0 ? 'color: var(--danger, #ef4444)' : ''">{{ syncFailedCount }}</code>
           </div>
           <div class="info-item">
             <span class="info-label">Client ID</span>
@@ -3297,5 +3409,119 @@ function formatBytes(bytes: number): string {
   font-size: 0.75rem;
   background: var(--bg-tertiary, #374151);
   color: var(--text-secondary, #9ca3af);
+}
+
+/* Account section */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 400px;
+}
+
+.input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.input-row .input {
+  flex: 1;
+}
+
+.divider-text {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.divider-text::before,
+.divider-text::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.google-btn {
+  width: 100%;
+}
+
+.plan-cards {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.plan-card {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: var(--font-sans);
+}
+
+.plan-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-accent);
+}
+
+.plan-card.recommended {
+  border-color: var(--accent);
+}
+
+.plan-badge {
+  position: absolute;
+  top: -10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-radius: var(--radius-sm);
+}
+
+.plan-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.plan-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.error-text {
+  color: var(--error);
+  font-size: 0.8125rem;
+}
+
+.sync-active {
+  color: var(--success);
+}
+
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 </style>
