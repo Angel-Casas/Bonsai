@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import auth from './routes/auth'
 import subs from './routes/subscriptions'
 import webhooks from './routes/webhooks'
+import sync from './routes/sync'
 
 const app = new Hono()
 
@@ -16,6 +17,7 @@ app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOStri
 app.route('/auth', auth)
 app.route('/subscriptions', subs)
 app.route('/webhooks', webhooks)
+app.route('/sync', sync)
 
 export default app
 export type AppType = typeof app
