@@ -44,6 +44,7 @@ import { getOpStats, getOrCreateClientId } from '@/db/opsService'
 import { LocalOnlySyncAdapter } from '@/db/syncAdapter'
 import { useAuthStore } from '@/stores/authStore'
 import { useSubscriptionStore } from '@/stores/subscriptionStore'
+import { useSyncState } from '@/composables/syncState'
 
 const emit = defineEmits<{
   close: []
@@ -56,6 +57,7 @@ const themeStore = useThemeStore()
 const tutorial = useTutorial()
 const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
+const { syncState: remoteSyncState, triggerSync } = useSyncState()
 const loginEmail = ref('')
 const loginSent = ref(false)
 const loginError = ref('')
@@ -149,6 +151,17 @@ const syncLatestTypes = ref<string[]>([])
 const syncClientId = ref('')
 const isSyncLoading = ref(false)
 const syncAdapter = new LocalOnlySyncAdapter()
+
+const syncStatusLabel = computed(() => {
+  switch (remoteSyncState.value) {
+    case 'idle': return 'Synced'
+    case 'pulling': return 'Pulling changes…'
+    case 'pushing': return 'Pushing changes…'
+    case 'resolving': return 'Resolving conflicts…'
+    case 'error': return 'Sync error'
+    default: return 'Unknown'
+  }
+})
 
 async function refreshSyncDiagnostics() {
   isSyncLoading.value = true
@@ -1269,6 +1282,20 @@ function formatBytes(bytes: number): string {
         <p v-else class="section-description sync-active">
           Cloud sync is active. Your conversations are being backed up.
         </p>
+
+        <!-- Live sync status (only when authenticated) -->
+        <div v-if="authStore.isLoggedIn" class="sync-status-row" data-testid="sync-status">
+          <span class="sync-indicator" :class="'sync-indicator--' + remoteSyncState" />
+          <span class="sync-status-label">{{ syncStatusLabel }}</span>
+          <button
+            class="btn btn-secondary btn-sm"
+            data-testid="sync-now-btn"
+            :disabled="remoteSyncState !== 'idle'"
+            @click="triggerSync"
+          >
+            Sync now
+          </button>
+        </div>
 
         <div class="info-grid">
           <div class="info-item">
@@ -3505,6 +3532,62 @@ function formatBytes(bytes: number): string {
 .error-text {
   color: var(--error);
   font-size: 0.8125rem;
+}
+
+/* Sync status indicator */
+.sync-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md, 0.5rem);
+  background: var(--bg-secondary, #1f2937);
+}
+
+.sync-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sync-indicator--idle {
+  background: var(--success, #22c55e);
+  box-shadow: 0 0 4px var(--success, #22c55e);
+}
+
+.sync-indicator--pulling,
+.sync-indicator--pushing {
+  background: var(--info, #3b82f6);
+  box-shadow: 0 0 4px var(--info, #3b82f6);
+  animation: sync-pulse 1.2s ease-in-out infinite;
+}
+
+.sync-indicator--resolving {
+  background: var(--warning, #eab308);
+  box-shadow: 0 0 4px var(--warning, #eab308);
+}
+
+.sync-indicator--error {
+  background: var(--danger, #ef4444);
+  box-shadow: 0 0 4px var(--danger, #ef4444);
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.sync-status-label {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
 }
 
 .sync-active {

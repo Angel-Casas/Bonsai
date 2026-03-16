@@ -15,6 +15,7 @@ import type { SyncState, SyncAdapter as OrchestratorSyncAdapter } from '@/db/syn
 import { RemoteSyncAdapter } from '@/db/remoteSyncAdapter'
 import { getOrCreateClientId } from '@/db/opsService'
 import type { ConflictPair, ResolvedConflict, RemoteOp } from '@/db/types'
+import { _bindSyncState } from '@/composables/syncState'
 
 const SYNC_INTERVAL_MS = 60_000
 
@@ -90,6 +91,10 @@ export function useSync() {
     if (!authStore.isLoggedIn || !isOnline.value) return
     orchestrator.runSync()
   }
+
+  // Expose sync state to the shared module so other components can read it
+  // without calling useSync() again (which would create duplicate adapters).
+  _bindSyncState(syncState, triggerSync)
 
   // ---------------------------------------------------------------------------
   // Lifecycle: mount / interval / online watcher
