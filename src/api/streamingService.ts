@@ -89,7 +89,12 @@ export function classifyError(error: Error): StreamingError {
 /** Options for sending a message */
 export interface SendMessageOptions {
   conversationId: string
-  userMessageId: string
+  /** Parent message ID (where the new message branches from) */
+  parentMessageId: string | null
+  /** The user message content (not yet persisted) */
+  userMessageContent: string
+  /** Pre-resolved context messages to send to API (includes pending user message at the end) */
+  contextMessages: Message[]
   modelOverride: string | null
   webSearchEnabled: boolean
   searchPreset: SearchPreset
@@ -102,10 +107,12 @@ export interface StreamingCallbacks {
   onContentUpdate: (content: string) => void
   /** Called when streaming completes successfully */
   onComplete: (finalContent: string) => void
-  /** Called on error */
-  onError: (error: Error) => void
-  /** Called when streaming starts (with assistant message ID) */
-  onStart: (assistantMessageId: string) => void
+  /** Called on error. isEarlyError=true means no content was streamed and messages were cleaned up */
+  onError: (error: Error, isEarlyError: boolean) => void
+  /** Called when streaming is about to start. Must create and return the user message ID. */
+  onCreateUserMessage: () => Promise<string>
+  /** Called after assistant message is created */
+  onAssistantCreated: (assistantMessageId: string) => void
   /** Called when streaming is aborted */
   onAbort?: (partialContent: string) => void
 }
@@ -211,18 +218,21 @@ export async function buildContextMessages(
 
 /**
  * Send a message and stream the assistant response
- * 
+ *
  * Flow:
  * 1. Validate API key exists
- * 2. Build context from resolved snapshot
- * 3. Create assistant message placeholder with 'streaming' status
- * 4. Call NanoGPT streaming API
+ * 2. Use pre-resolved context messages
+ * 3. Start streaming API call
+ * 4. On first success signal (requestId or token), create user & assistant messages
  * 5. Update content with rate-limited persistence
  * 6. On complete/error/abort, persist final state
+ *
+ * Key: Messages are NOT created until we know the API call succeeded,
+ * preventing the "message appears then disappears" glitch on early errors.
  */
 export async function sendMessageAndStream(
   options: SendMessageOptions,
-  messageMap: Map<string, Message>,
+  _messageMap: Map<string, Message>, // Kept for signature compatibility
   callbacks: StreamingCallbacks
 ): Promise<StreamResult> {
   // Step 1: Validate API key
@@ -230,107 +240,142 @@ export async function sendMessageAndStream(
   if (!apiKey) {
     throw new MissingApiKeyError()
   }
-  
-  // Step 2: Build context from resolved snapshot
-  const contextMessages = await buildContextMessages(options.userMessageId, messageMap)
-  const nanoMessages = messagesToNanoGPTFormat(contextMessages)
-  
+
+  // Step 2: Use pre-resolved context messages (includes pending user message)
+  const nanoMessages = messagesToNanoGPTFormat(options.contextMessages)
+
   // Step 3: Build effective model string
   const baseModel = options.modelOverride ?? options.defaultModel
   const effectiveModel = buildEffectiveModel(baseModel, options.webSearchEnabled, options.searchPreset)
-  
-  // Step 4: Create assistant message placeholder
-  const assistantMessage = await createMessage({
-    conversationId: options.conversationId,
-    parentId: options.userMessageId,
-    role: 'assistant',
-    content: '',
-    modelRespondedWith: effectiveModel,
-    streamingStatus: 'streaming',
-  })
-  
-  callbacks.onStart(assistantMessage.id)
-  
-  // Step 5: Set up streaming with throttled persistence
+
+  // Messages will be created on first success signal
+  let userMessageId: string | null = null
+  let assistantMessageId: string | null = null
+  let messageCreationPromise: Promise<void> | null = null
   let currentContent = ''
   let isAborted = false
-  
-  const persistContent = async () => {
-    await updateMessage(assistantMessage.id, {
-      content: currentContent,
-    })
+  let throttledPersist: ReturnType<typeof createThrottledPersistence> | null = null
+
+  // Create messages when we know the API call succeeded.
+  // Uses a Promise (not a boolean) so concurrent callers properly wait for completion.
+  const ensureMessagesCreated = async () => {
+    if (!messageCreationPromise) {
+      messageCreationPromise = (async () => {
+        // Let the store create and persist the user message
+        userMessageId = await callbacks.onCreateUserMessage()
+
+        // Create assistant message as child of user message
+        const assistantMessage = await createMessage({
+          conversationId: options.conversationId,
+          parentId: userMessageId,
+          role: 'assistant',
+          content: currentContent, // May already have some content
+          modelRespondedWith: effectiveModel,
+          streamingStatus: 'streaming',
+        })
+        assistantMessageId = assistantMessage.id
+
+        // Notify store of assistant message
+        callbacks.onAssistantCreated(assistantMessageId)
+
+        // Set up throttled persistence now that we have the message
+        throttledPersist = createThrottledPersistence(async () => {
+          if (assistantMessageId) {
+            await updateMessage(assistantMessageId, { content: currentContent })
+          }
+        }, PERSISTENCE_THROTTLE_MS)
+      })()
+    }
+    return messageCreationPromise
   }
-  
-  const throttledPersist = createThrottledPersistence(persistContent, PERSISTENCE_THROTTLE_MS)
-  
+
   // Create client and start streaming
   const client = new NanoGPTClient(apiKey)
   const payload = buildChatCompletionPayload(nanoMessages, effectiveModel, true)
-  
+
   const abortController = await client.streamChatCompletion(payload, {
     onToken: (token) => {
       if (isAborted) return
       currentContent += token
+
+      // Create messages on first token (fire and forget)
+      if (!messageCreationPromise) {
+        ensureMessagesCreated().catch(console.error)
+      }
+
       callbacks.onContentUpdate(currentContent)
-      throttledPersist.schedule()
+      throttledPersist?.schedule()
     },
     onComplete: async (fullContent) => {
       if (isAborted) return
       currentContent = fullContent
-      throttledPersist.cancel()
-      
+      throttledPersist?.cancel()
+
+      // Ensure messages exist (in case onComplete fires without tokens)
+      await ensureMessagesCreated()
+
       // Final persist with complete status
-      await updateMessage(assistantMessage.id, {
-        content: fullContent,
-        streamingStatus: 'complete',
-      })
-      
+      if (assistantMessageId) {
+        await updateMessage(assistantMessageId, {
+          content: fullContent,
+          streamingStatus: 'complete',
+        })
+      }
+
       callbacks.onComplete(fullContent)
     },
     onError: async (error) => {
       if (isAborted) return
-      throttledPersist.cancel()
-      
-      // Handle authentication errors specially
-      const errorMessage = error instanceof AuthenticationError
-        ? 'Authentication failed. Please check your API key in Settings.'
-        : error.message
-      
-      // Persist partial content with error status
-      await updateMessage(assistantMessage.id, {
-        content: currentContent,
-        streamingStatus: 'error',
-        streamingError: errorMessage,
-      })
-      
-      callbacks.onError(error)
+      throttledPersist?.cancel()
+
+      // Early error = message creation was never initiated = nothing to clean up
+      const isEarlyError = !messageCreationPromise
+
+      if (!isEarlyError && assistantMessageId) {
+        // Messages exist - update with error state
+        const errorMessage = error instanceof AuthenticationError
+          ? 'Authentication failed. Please check your API key in Settings.'
+          : error.message
+
+        await updateMessage(assistantMessageId, {
+          content: currentContent,
+          streamingStatus: 'error',
+          streamingError: errorMessage,
+        })
+      }
+      // If early error, no messages were created, no cleanup needed
+
+      callbacks.onError(error, isEarlyError)
     },
     onRequestId: async (requestId) => {
-      await updateMessage(assistantMessage.id, {
-        requestId,
-      })
+      // Request ID means server accepted - create messages
+      await ensureMessagesCreated()
+      if (assistantMessageId) {
+        await updateMessage(assistantMessageId, { requestId })
+      }
     },
   })
-  
+
   // Set up abort handler
   abortController.signal.addEventListener('abort', async () => {
     if (isAborted) return
     isAborted = true
-    
-    throttledPersist.cancel()
-    
-    // Persist partial content with aborted status
-    await updateMessage(assistantMessage.id, {
-      content: currentContent,
-      streamingStatus: 'aborted',
-    })
-    
+
+    throttledPersist?.cancel()
+
+    if (assistantMessageId) {
+      await updateMessage(assistantMessageId, {
+        content: currentContent,
+        streamingStatus: 'aborted',
+      })
+    }
+
     callbacks.onAbort?.(currentContent)
   })
-  
+
   return {
     abortController,
-    assistantMessageId: assistantMessage.id,
+    assistantMessageId: assistantMessageId ?? '',
   }
 }
 

@@ -35,7 +35,7 @@ import {
   encryptOptionalField,
   decryptOptionalField,
 } from './encryption';
-import { appendOp } from './opsService';
+import { safeAppendOp } from './opsService';
 
 // ============================================================================
 // Types
@@ -759,11 +759,11 @@ export async function importData(
     );
 
     // Emit sync op for import
-    appendOp('import.completed', {
+    safeAppendOp('import.completed', {
       conversationCount: result.imported.conversations,
       messageCount: result.imported.messages,
       mode: options.mode,
-    }).catch(console.error);
+    });
 
     result.success = true;
     return result;
@@ -930,14 +930,14 @@ export async function exportConversationAsMarkdown(
 
   if (leaves.length <= 1) {
     // Linear conversation - single flat section
-    const path = leaves.length === 1 ? walkToRoot(leaves[0].id, messageMap) : [];
+    const path = leaves.length === 1 ? walkToRoot(leaves[0]!.id, messageMap) : [];
     lines.push('---');
     lines.push('');
     lines.push(...await formatMessagesAsMarkdown(path));
   } else {
     // Branched conversation - one section per branch
     for (let i = 0; i < leaves.length; i++) {
-      const branchPath = walkToRoot(leaves[i].id, messageMap);
+      const branchPath = walkToRoot(leaves[i]!.id, messageMap);
       const branchLabel = findBranchLabel(branchPath) || `Branch ${i + 1}`;
       lines.push(`## ${branchLabel}`);
       lines.push('');
@@ -992,11 +992,11 @@ export async function exportAllAsMarkdown(
     lines.push('');
 
     if (leaves.length <= 1) {
-      const path = leaves.length === 1 ? walkToRoot(leaves[0].id, messageMap) : [];
+      const path = leaves.length === 1 ? walkToRoot(leaves[0]!.id, messageMap) : [];
       lines.push(...await formatMessagesAsMarkdown(path));
     } else {
       for (let i = 0; i < leaves.length; i++) {
-        const branchPath = walkToRoot(leaves[i].id, messageMap);
+        const branchPath = walkToRoot(leaves[i]!.id, messageMap);
         const branchLabel = findBranchLabel(branchPath) || `Branch ${i + 1}`;
         lines.push(`### ${branchLabel}`);
         lines.push('');

@@ -266,6 +266,21 @@ export async function bootstrapApp(
 }
 
 // ============================================================================
+// Settings Panel Helper
+// ============================================================================
+
+/**
+ * Opens the settings overlay panel by clicking the settings button.
+ * Waits for the settings content to be visible.
+ *
+ * @param page - Playwright page object
+ */
+export async function openSettings(page: Page): Promise<void> {
+  await page.click('[data-testid="settings-btn"]')
+  await page.waitForSelector('[data-testid="api-key-section"]')
+}
+
+// ============================================================================
 // Conversation Creation Helper
 // ============================================================================
 
@@ -380,10 +395,10 @@ export interface CreateBranchOptions {
 
 /**
  * Creates a branch from a message element.
- * The message element should be hovered first to reveal the branch button.
+ * Opens the branch dialog, sets the title, then types content in the composer.
  *
  * @param page - Playwright page object
- * @param messageLocator - Locator for the message to branch from
+ * @param messageIndex - Index of the message in the timeline to branch from
  * @param options - Branch creation options
  */
 export async function createBranchFromMessage(
@@ -409,14 +424,14 @@ export async function createBranchFromMessage(
     await page.fill('[data-testid="branch-title-input"]', options.branchTitle)
   }
 
-  // Fill branch content
-  await page.fill('[data-testid="branch-content-input"]', options.content)
-
-  // Create branch
+  // Create branch (this navigates to the branch point)
   await page.click('[data-testid="create-branch-btn"]')
 
-  // Wait for dialog to close and new message to appear
+  // Wait for dialog to close
   await page.waitForSelector('[data-testid="branch-dialog"]', { state: 'hidden' })
+
+  // Now type the content in the composer and send
+  await sendMessage(page, options.content)
 }
 
 // ============================================================================

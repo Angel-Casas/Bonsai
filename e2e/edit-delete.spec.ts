@@ -65,16 +65,20 @@ test.describe('Edit and Delete - E2E Tests', () => {
   test('Conversation view shows message tree sidebar', async ({ page }) => {
     await createConversation(page, { title: 'Sidebar Test' })
 
-    // Desktop should show sidebar toggle
-    const sidebarToggle = page.locator('[data-testid="toggle-sidebar-desktop-btn"]')
-    await expect(sidebarToggle).toBeVisible()
-
-    // Click to toggle sidebar
-    await sidebarToggle.click()
-
-    // Sidebar should be visible
+    // Desktop sidebar should be visible by default
     const sidebar = page.locator('[data-testid="tree-sidebar"]')
     await expect(sidebar).toBeVisible()
+
+    // Collapse button should be visible (sidebar is open)
+    const collapseBtn = page.locator('[data-testid="sidebar-collapse-btn"]')
+    await expect(collapseBtn).toBeVisible()
+
+    // Click to collapse sidebar
+    await collapseBtn.click()
+
+    // Expand tab should appear when collapsed
+    const expandTab = page.locator('[data-testid="sidebar-expand-tab"]')
+    await expect(expandTab).toBeVisible()
   })
 })
 

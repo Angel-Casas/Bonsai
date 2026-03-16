@@ -38,7 +38,6 @@ import {
   createMessage,
   updateMessage,
   getMessageMap,
-  hardDeleteMessage,
 } from '@/db/repositories'
 import { buildChildrenMap, getLeaves, getFullBranchTimeline } from '@/db/treeUtils'
 import { 
@@ -55,7 +54,7 @@ import {
 } from '@/db/repositories/promptContextConfigRepository'
 import { resolveContext, type ContextResolverConfig, type ContextPreset } from '@/db/contextResolver'
 import { nowISO, generateId } from '@/db'
-import { appendOp } from '@/db/opsService'
+import { safeAppendOp } from '@/db/opsService'
 
 export const useConversationStore = defineStore('conversation', () => {
   // ========== State ==========
@@ -195,7 +194,7 @@ export const useConversationStore = defineStore('conversation', () => {
    */
   async function createNewConversation(title: string): Promise<Conversation> {
     const conversation = await createConversation({ title })
-    appendOp('conversation.create', { conversationId: conversation.id, title }, conversation.id).catch(console.error)
+    safeAppendOp('conversation.create', { conversationId: conversation.id, title }, conversation.id)
     conversations.value = [conversation, ...conversations.value]
     return conversation
   }
@@ -206,7 +205,7 @@ export const useConversationStore = defineStore('conversation', () => {
   async function renameConversation(id: string, title: string): Promise<void> {
     const updated = await updateConversation(id, { title })
     if (updated) {
-      appendOp('conversation.rename', { conversationId: id, title }, id).catch(console.error)
+      safeAppendOp('conversation.rename', { conversationId: id, title }, id)
       const index = conversations.value.findIndex((c) => c.id === id)
       if (index !== -1) {
         conversations.value[index] = updated
@@ -238,7 +237,7 @@ export const useConversationStore = defineStore('conversation', () => {
    */
   async function removeConversation(id: string): Promise<void> {
     await deleteConversation(id)
-    appendOp('conversation.delete', { conversationId: id }, id).catch(console.error)
+    safeAppendOp('conversation.delete', { conversationId: id }, id)
     conversations.value = conversations.value.filter((c) => c.id !== id)
     if (activeConversation.value?.id === id) {
       activeConversation.value = null
@@ -322,12 +321,11 @@ export const useConversationStore = defineStore('conversation', () => {
       // Active message was deleted - try to select a new one
       if (messageMap.value.size > 0) {
         // Pick the latest leaf message as the new active message
-        const children = buildChildrenMap(messageMap.value)
-        const leaves = getLeaves(messageMap.value, children)
+        const leaves = getLeaves(messageMap.value)
         if (leaves.length > 0) {
           // Sort by createdAt descending and pick the most recent
           leaves.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          activeMessageId.value = leaves[0].id
+          activeMessageId.value = leaves[0]!.id
         } else {
           activeMessageId.value = null
         }
@@ -436,14 +434,14 @@ export const useConversationStore = defineStore('conversation', () => {
     // Update conversation in list
     await loadConversations()
 
-    appendOp('message.create', {
+    safeAppendOp('message.create', {
       messageId: message.id,
       conversationId: activeConversation.value.id,
       parentId,
       role,
       content,
       branchTitle,
-    }, activeConversation.value.id).catch(console.error)
+    }, activeConversation.value.id)
 
     return message
   }
@@ -467,14 +465,14 @@ export const useConversationStore = defineStore('conversation', () => {
       branchTitle,
     })
 
-    appendOp('message.create', {
+    safeAppendOp('message.create', {
       messageId: result.message.id,
       conversationId: activeConversation.value.id,
       parentId: fromMessageId,
       role: 'user',
       content,
       branchTitle,
-    }, activeConversation.value.id).catch(console.error)
+    }, activeConversation.value.id)
 
     // Update conversation updatedAt
     await updateConversation(activeConversation.value.id, {})
@@ -545,10 +543,10 @@ export const useConversationStore = defineStore('conversation', () => {
     // Perform deletion
     const result = await deleteSubtree(messageId)
 
-    appendOp('message.deleteSubtree', {
+    safeAppendOp('message.deleteSubtree', {
       messageId,
       deletedCount: result.deletedCount,
-    }, activeConversation.value.id).catch(console.error)
+    }, activeConversation.value.id)
 
     // Update conversation updatedAt
     await updateConversation(activeConversation.value.id, {})
@@ -607,11 +605,11 @@ export const useConversationStore = defineStore('conversation', () => {
       reason,
     })
 
-    appendOp('message.edit', {
+    safeAppendOp('message.edit', {
       messageId,
       content: newContent,
       reason,
-    }, activeConversation.value.id).catch(console.error)
+    }, activeConversation.value.id)
 
     // Update conversation updatedAt
     await updateConversation(activeConversation.value.id, {})
@@ -655,10 +653,10 @@ export const useConversationStore = defineStore('conversation', () => {
     }
 
     for (const child of children) {
-      appendOp('message.deleteSubtree', {
+      safeAppendOp('message.deleteSubtree', {
         messageId: child.id,
         deletedCount: 0,
-      }, activeConversation.value.id).catch(console.error)
+      }, activeConversation.value.id)
     }
 
     // Edit the message in place with revision
@@ -668,11 +666,11 @@ export const useConversationStore = defineStore('conversation', () => {
       reason: 'rewrite-history',
     })
 
-    appendOp('message.edit', {
+    safeAppendOp('message.edit', {
       messageId,
       content: newContent,
       reason: 'rewrite-history',
-    }, activeConversation.value.id).catch(console.error)
+    }, activeConversation.value.id)
 
     // Update conversation updatedAt
     await updateConversation(activeConversation.value.id, {})
@@ -721,12 +719,12 @@ export const useConversationStore = defineStore('conversation', () => {
       branchTitle: branchTitle ?? 'Edited',
     })
 
-    appendOp('message.createVariant', {
+    safeAppendOp('message.createVariant', {
       messageId: variant.id,
       variantOfMessageId: messageId,
       content: newContent,
       branchTitle: branchTitle ?? 'Edited',
-    }, activeConversation.value.id).catch(console.error)
+    }, activeConversation.value.id)
 
     // Update conversation updatedAt
     await updateConversation(activeConversation.value.id, {})
@@ -871,7 +869,7 @@ export const useConversationStore = defineStore('conversation', () => {
       content,
       createdAt: nowISO(),
       updatedAt: nowISO(),
-      deletedAt: null,
+      deletedAt: undefined,
       contentEnc: null,
       branchTitle: branchTitle ?? undefined,
     }

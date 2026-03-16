@@ -13,6 +13,8 @@ import * as path from 'path'
 import {
   bootstrapApp,
   createConversation,
+  openSettings,
+  waitForAppReady,
 } from './helpers'
 
 test.describe('Export/Import', () => {
@@ -22,16 +24,16 @@ test.describe('Export/Import', () => {
 
   test('export button triggers download with valid JSON', async ({ page }) => {
     // Navigate directly to settings
-    await page.goto('/settings')
+    await openSettings(page)
     await page.waitForSelector('[data-testid="data-storage-section"]')
 
-    // Set up download listener
-    const downloadPromise = page.waitForEvent('download')
-
-    // Click export button
+    // Click export button (opens format selection dialog)
     await page.click('[data-testid="export-all-btn"]')
+    await page.waitForSelector('[data-testid="export-all-dialog"]')
 
-    // Wait for download
+    // Set up download listener and confirm export (JSON format is default)
+    const downloadPromise = page.waitForEvent('download')
+    await page.click('[data-testid="confirm-export-all-btn"]')
     const download = await downloadPromise
 
     // Verify filename pattern
@@ -58,7 +60,7 @@ test.describe('Export/Import', () => {
 
   test('import dialog shows validation summary for valid file', async ({ page }) => {
     // Navigate directly to settings
-    await page.goto('/settings')
+    await openSettings(page)
     await page.waitForSelector('[data-testid="data-storage-section"]')
 
     // Create a valid export file
@@ -111,7 +113,7 @@ test.describe('Export/Import', () => {
 
   test('import dialog shows errors for invalid file', async ({ page }) => {
     // Navigate directly to settings
-    await page.goto('/settings')
+    await openSettings(page)
     await page.waitForSelector('[data-testid="data-storage-section"]')
 
     // Create an invalid export file
@@ -150,12 +152,14 @@ test.describe('Export/Import', () => {
     const originalConvId = url.split('/conversation/')[1]
 
     // Go to settings and export
-    await page.goto('/settings')
+    await openSettings(page)
     await page.waitForSelector('[data-testid="data-storage-section"]')
 
-    // Export data
-    const downloadPromise = page.waitForEvent('download')
+    // Export data (click export, then confirm in format dialog)
     await page.click('[data-testid="export-all-btn"]')
+    await page.waitForSelector('[data-testid="export-all-dialog"]')
+    const downloadPromise = page.waitForEvent('download')
+    await page.click('[data-testid="confirm-export-all-btn"]')
     const download = await downloadPromise
 
     // Save export file
@@ -171,17 +175,18 @@ test.describe('Export/Import', () => {
     )
     expect(exportedConv).toBeTruthy()
 
+    // Handle confirmation dialog (must be set up BEFORE clicking)
+    page.on('dialog', (dialog) => dialog.accept())
+
     // Clear all data using the Danger Zone
     await page.click('[data-testid="clear-conversations-btn"]')
 
-    // Handle confirmation dialog
-    page.on('dialog', (dialog) => dialog.accept())
-
-    // Wait for page reload
+    // Wait for page reload (clearConversationsOnly calls window.location.reload)
     await page.waitForLoadState('networkidle')
+    await waitForAppReady(page)
 
-    // Navigate to settings again
-    await page.goto('/settings')
+    // Re-open settings overlay (closed by page reload)
+    await openSettings(page)
     await page.waitForSelector('[data-testid="data-storage-section"]')
 
     // Import the exported file

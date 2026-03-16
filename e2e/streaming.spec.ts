@@ -14,6 +14,7 @@ import {
   mockNanoGPTStreaming,
   clearNanoGPTMock,
   clearApiKey,
+  openSettings,
 } from './helpers'
 
 test.describe('NanoGPT Streaming', () => {
@@ -45,8 +46,8 @@ test.describe('NanoGPT Streaming', () => {
     await expect(page.locator('[data-testid="search-preset-btn"]')).toBeVisible()
   })
 
-  test('settings page allows API key configuration', async ({ page }) => {
-    await page.goto('/settings')
+  test('settings panel allows API key configuration', async ({ page }) => {
+    await openSettings(page)
 
     await expect(page.locator('[data-testid="api-key-section"]')).toBeVisible()
 
@@ -55,17 +56,16 @@ test.describe('NanoGPT Streaming', () => {
   })
 
   test('shows masked API key in settings', async ({ page }) => {
-    await page.goto('/settings')
+    await openSettings(page)
 
     const maskedKey = page.locator('[data-testid="masked-api-key"]')
     await expect(maskedKey).toBeVisible()
     await expect(maskedKey).toContainText('••••')
   })
 
-  test('can navigate to settings from home', async ({ page }) => {
+  test('can open settings from home', async ({ page }) => {
     await page.click('[data-testid="settings-btn"]')
 
-    await expect(page).toHaveURL('/settings')
     await expect(page.locator('h1')).toContainText('Settings')
   })
 
@@ -78,9 +78,12 @@ test.describe('NanoGPT Streaming', () => {
     // Check dropdown is visible
     await expect(page.locator('[data-testid="model-dropdown"]')).toBeVisible()
 
-    // Should have model options
-    await expect(page.locator('[data-testid="model-dropdown"]')).toContainText('GPT-4o')
-    await expect(page.locator('[data-testid="model-dropdown"]')).toContainText('Claude Sonnet 4')
+    // Should have search input
+    await expect(page.locator('[data-testid="model-search-input"]')).toBeVisible()
+
+    // Should have model options (check for provider groups and model names)
+    await expect(page.locator('[data-testid="model-dropdown"]')).toContainText('OpenAI')
+    await expect(page.locator('[data-testid="model-dropdown"]')).toContainText('Use conversation default')
   })
 
   test('effective model shows with web search suffix', async ({ page }) => {
@@ -209,21 +212,24 @@ test.describe('NanoGPT Streaming', () => {
     await expect(page.locator('[data-testid="send-btn"]')).toBeVisible()
   })
 
-  test('shows error when API key is missing', async ({ page }) => {
+  test('disables send button when API key is missing', async ({ page }) => {
     // Clear the API key
     await clearApiKey(page)
     await page.reload()
 
     await createConversation(page)
     await page.fill('[data-testid="composer-input"]', 'Test without API key')
-    await page.click('[data-testid="send-btn"]')
 
-    // Error banner should appear
-    await expect(page.locator('[data-testid="error-banner"]')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('[data-testid="error-banner"]')).toContainText('API key')
+    // Send button should be disabled when API key is missing
+    const sendBtn = page.locator('[data-testid="send-btn"]')
+    await expect(sendBtn).toBeDisabled()
+    await expect(sendBtn).toHaveAttribute('title', /API key required/)
+
+    // Status message should indicate API key is needed
+    await expect(page.locator('[data-testid="no-api-key-status"]')).toBeVisible()
   })
 
-  test('shows error banner for 401 response with settings link', async ({ page }) => {
+  test('shows error banner for 401 response with "Set API key now" button', async ({ page }) => {
     // Set up mock with 401 error
     await clearNanoGPTMock(page)
     await mockNanoGPTStreaming(page, {
@@ -238,21 +244,22 @@ test.describe('NanoGPT Streaming', () => {
     // Error banner should appear with authentication error
     const errorBanner = page.locator('[data-testid="error-banner"]')
     await expect(errorBanner).toBeVisible({ timeout: 5000 })
-    
+
     // Should contain auth-related keywords and status code
     await expect(errorBanner).toContainText(/[Aa]uthentication/)
     await expect(errorBanner).toContainText('401')
-    
-    // Settings link should be visible for auth errors
-    const settingsLink = page.locator('[data-testid="error-banner-settings-link"]')
-    await expect(settingsLink).toBeVisible()
-    
-    // Clicking settings link should navigate to /settings
-    await settingsLink.click()
-    await expect(page).toHaveURL('/settings')
+
+    // "Set API key now" button should be visible for auth errors
+    const setApiKeyBtn = page.locator('[data-testid="set-api-key-btn"]')
+    await expect(setApiKeyBtn).toBeVisible()
+    await expect(setApiKeyBtn).toHaveText('Set API key now')
+
+    // Clicking should open settings overlay
+    await setApiKeyBtn.click()
+    await expect(page.locator('[data-testid="api-key-section"]')).toBeVisible()
   })
 
-  test('shows error banner for 403 response with settings link', async ({ page }) => {
+  test('shows error banner for 403 response with "Set API key now" button', async ({ page }) => {
     // Set up mock with 403 error
     await clearNanoGPTMock(page)
     await mockNanoGPTStreaming(page, {
@@ -267,13 +274,13 @@ test.describe('NanoGPT Streaming', () => {
     // Error banner should appear with authentication error
     const errorBanner = page.locator('[data-testid="error-banner"]')
     await expect(errorBanner).toBeVisible({ timeout: 5000 })
-    
+
     // Should contain auth-related keywords and status code
     await expect(errorBanner).toContainText(/[Aa]uthentication/)
     await expect(errorBanner).toContainText('403')
-    
-    // Settings link should be visible for auth errors
-    await expect(page.locator('[data-testid="error-banner-settings-link"]')).toBeVisible()
+
+    // "Set API key now" button should be visible for auth errors
+    await expect(page.locator('[data-testid="set-api-key-btn"]')).toBeVisible()
   })
 
   test('error banner can be dismissed', async ({ page }) => {

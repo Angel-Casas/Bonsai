@@ -29,6 +29,21 @@ export interface ContextResolverConfig {
 }
 
 /**
+ * A saved context preset — a named snapshot of context configuration
+ * that can be loaded/restored later. Stored per-conversation in uiState.
+ */
+export interface ContextPreset {
+  /** Unique identifier (UUID) */
+  id: string;
+  /** User-defined name (e.g., "UI/UX Focus") */
+  name: string;
+  /** The context configuration snapshot */
+  config: ContextResolverConfig;
+  /** When the preset was created (ISO 8601) */
+  createdAt: string;
+}
+
+/**
  * Result of context resolution
  */
 export interface ResolvedContext {
@@ -42,16 +57,16 @@ export interface ResolvedContext {
   resolvedMessageIds: string[];
   /** Warnings about potential issues */
   warnings: ContextWarning[];
+  /** Pinned IDs that no longer exist in the conversation (for cleanup) */
+  stalePinnedIds: string[];
 }
 
 /**
  * Warning types for context resolution
  */
-export type ContextWarningType = 
+export type ContextWarningType =
   | 'ANCHOR_NOT_ON_PATH'
-  | 'ASSISTANT_WITHOUT_USER'
-  | 'PINNED_MESSAGE_NOT_FOUND'
-  | 'EXCLUDED_MESSAGE_NOT_ON_PATH';
+  | 'ASSISTANT_WITHOUT_USER';
 
 export interface ContextWarning {
   type: ContextWarningType;
@@ -81,10 +96,11 @@ export function resolveContext(
   config: ContextResolverConfig
 ): ResolvedContext {
   const warnings: ContextWarning[] = [];
-  
+  const stalePinnedIds: string[] = [];
+
   // Step 1: Build full path from root to active message
   let path = getPathToRoot(activeMessageId, messageMap);
-  const pathIdSet = new Set(path.map(m => m.id));
+  // pathIdSet reserved for future pinned-message validation
   
   // Step 2: Apply start anchor (truncate path)
   if (config.startFromMessageId) {
@@ -106,17 +122,6 @@ export function resolveContext(
   const excludedSet = new Set(config.excludedMessageIds);
   path = path.filter(m => !excludedSet.has(m.id));
   
-  // Check for excluded messages that weren't on path (informational)
-  for (const excludedId of config.excludedMessageIds) {
-    if (!pathIdSet.has(excludedId)) {
-      warnings.push({
-        type: 'EXCLUDED_MESSAGE_NOT_ON_PATH',
-        message: `Excluded message is not on the current path.`,
-        relatedMessageId: excludedId,
-      });
-    }
-  }
-  
   // Step 4: Build pinned list (deduplicate against path)
   const pathIdSetAfterExclusions = new Set(path.map(m => m.id));
   const pinnedMessages: Message[] = [];
@@ -129,11 +134,7 @@ export function resolveContext(
     
     const pinnedMessage = messageMap.get(pinnedId);
     if (!pinnedMessage) {
-      warnings.push({
-        type: 'PINNED_MESSAGE_NOT_FOUND',
-        message: `Pinned message not found in conversation.`,
-        relatedMessageId: pinnedId,
-      });
+      stalePinnedIds.push(pinnedId);
       continue;
     }
     
@@ -171,6 +172,7 @@ export function resolveContext(
     resolvedMessages: finalMessages,
     resolvedMessageIds: finalMessages.map(m => m.id),
     warnings,
+    stalePinnedIds,
   };
 }
 

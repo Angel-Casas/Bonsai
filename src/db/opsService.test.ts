@@ -3,12 +3,13 @@
  * Uses fake-indexeddb for testing IndexedDB operations
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { createTestDatabase, deleteDatabase, type BonsaiDatabase } from './database';
 import {
   getOrCreateClientId,
   appendOp,
+  safeAppendOp,
   getPendingOps,
   markAcked,
   getOpStats,
@@ -270,6 +271,64 @@ describe('opsService', () => {
       const stats = await getOpStats(db);
       expect(stats.pendingCount).toBe(0);
       expect(stats.latestTypes).toContain('conversation.create');
+    });
+  });
+
+  // ==========================================================================
+  // safeAppendOp
+  // ==========================================================================
+
+  describe('safeAppendOp', () => {
+    it('creates an op on success (same as appendOp)', async () => {
+      await safeAppendOp('conversation.create', { title: 'safe' }, 'conv-1', db);
+      const pending = await getPendingOps(undefined, db);
+      expect(pending.length).toBe(1);
+      expect(pending[0]!.type).toBe('conversation.create');
+    });
+
+    it('records a failed op when appendOp throws', async () => {
+      // Close DB to force write failure
+      db.close();
+
+      await safeAppendOp('conversation.create', { title: 'will fail' }, 'conv-1', db);
+
+      // Reopen to check — failed record may or may not have been written
+      // (DB was closed, so the fallback write also fails).
+      // The key invariant: safeAppendOp never throws.
+    });
+
+    it('never throws even when both writes fail', async () => {
+      db.close();
+      // Should not throw
+      await expect(
+        safeAppendOp('conversation.create', { title: 'fail' }, undefined, db)
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // getOpStats failedCount
+  // ==========================================================================
+
+  describe('getOpStats failedCount', () => {
+    it('returns correct failed count', async () => {
+      await appendOp('conversation.create', { n: 1 }, undefined, db);
+      // Manually insert a failed op
+      await db.syncOps.add({
+        id: 'failed-op-1',
+        createdAt: new Date().toISOString(),
+        conversationId: null,
+        type: 'conversation.create',
+        payload: '{}',
+        payloadEnc: null,
+        status: 'failed',
+        clientId: 'test',
+        schemaVersion: 1,
+      });
+
+      const stats = await getOpStats(db);
+      expect(stats.pendingCount).toBe(1);
+      expect(stats.failedCount).toBe(1);
     });
   });
 

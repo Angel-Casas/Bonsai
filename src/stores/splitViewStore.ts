@@ -22,12 +22,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Message } from '@/db/types'
-import { getPathToRoot } from '@/db/treeUtils'
+import { getPathToRoot, getFullBranchTimeline } from '@/db/treeUtils'
 
 export type PaneId = 'A' | 'B'
 
 export interface PaneState {
   activeMessageId: string | null
+  /** Per-pane model override (null = use conversation default) */
+  modelId: string | null
 }
 
 export const useSplitViewStore = defineStore('splitView', () => {
@@ -39,11 +41,13 @@ export const useSplitViewStore = defineStore('splitView', () => {
   /** Pane A state */
   const paneA = ref<PaneState>({
     activeMessageId: null,
+    modelId: null,
   })
 
   /** Pane B state */
   const paneB = ref<PaneState>({
     activeMessageId: null,
+    modelId: null,
   })
 
   /** Currently focused pane ('A' or 'B') - determines which pane receives tree clicks */
@@ -82,13 +86,20 @@ export const useSplitViewStore = defineStore('splitView', () => {
 
   /**
    * Enable split view mode
-   * Initializes pane B with the same position as the current active message
+   * If panes already have state (from previous split view session), restore that.
+   * Otherwise, initialize both panes with the current active message.
    */
   function enableSplitView(currentActiveMessageId: string | null) {
     splitViewEnabled.value = true
-    // Pane A keeps the current position
+
+    // If panes already have saved state, just re-enable without changing positions
+    if (paneA.value.activeMessageId !== null || paneB.value.activeMessageId !== null) {
+      // Panes have previous state, keep it
+      return
+    }
+
+    // First time enabling - initialize both panes with the current position
     paneA.value.activeMessageId = currentActiveMessageId
-    // Pane B starts at the same position (user can then navigate differently)
     paneB.value.activeMessageId = currentActiveMessageId
     focusedPane.value = 'A'
   }
@@ -96,14 +107,12 @@ export const useSplitViewStore = defineStore('splitView', () => {
   /**
    * Disable split view mode
    * Returns the active message ID from the focused pane to restore single view
+   * NOTE: Does NOT reset pane states - they are preserved for when split view is re-enabled
    */
   function disableSplitView(): string | null {
     splitViewEnabled.value = false
     const activeId = getPaneState(focusedPane.value).activeMessageId
-    // Reset pane states
-    paneA.value.activeMessageId = null
-    paneB.value.activeMessageId = null
-    focusedPane.value = 'A'
+    // Don't reset pane states - preserve them for when split view is re-enabled
     streamingPane.value = null
     return activeId
   }
@@ -123,6 +132,24 @@ export const useSplitViewStore = defineStore('splitView', () => {
       paneA.value.activeMessageId = messageId
     } else {
       paneB.value.activeMessageId = messageId
+    }
+  }
+
+  /**
+   * Get the model for a specific pane
+   */
+  function getPaneModel(paneId: PaneId): string | null {
+    return paneId === 'A' ? paneA.value.modelId : paneB.value.modelId
+  }
+
+  /**
+   * Set the model for a specific pane
+   */
+  function setPaneModel(paneId: PaneId, modelId: string | null) {
+    if (paneId === 'A') {
+      paneA.value.modelId = modelId
+    } else {
+      paneB.value.modelId = modelId
     }
   }
 
@@ -154,8 +181,11 @@ export const useSplitViewStore = defineStore('splitView', () => {
    */
   function swapPanes() {
     const tempActiveId = paneA.value.activeMessageId
+    const tempModelId = paneA.value.modelId
     paneA.value.activeMessageId = paneB.value.activeMessageId
+    paneA.value.modelId = paneB.value.modelId
     paneB.value.activeMessageId = tempActiveId
+    paneB.value.modelId = tempModelId
   }
 
   /**
@@ -204,6 +234,7 @@ export const useSplitViewStore = defineStore('splitView', () => {
 
   /**
    * Get timeline for a specific pane
+   * Returns the full branch: path from root through active message to leaf
    */
   function getPaneTimeline(
     paneId: PaneId,
@@ -211,7 +242,7 @@ export const useSplitViewStore = defineStore('splitView', () => {
   ): Message[] {
     const paneState = getPaneState(paneId)
     if (!paneState.activeMessageId) return []
-    return getPathToRoot(paneState.activeMessageId, messageMap)
+    return getFullBranchTimeline(paneState.activeMessageId, messageMap)
   }
 
   /**
@@ -221,7 +252,9 @@ export const useSplitViewStore = defineStore('splitView', () => {
     paneAId: string | null,
     paneBId: string | null,
     focus: PaneId | null,
-    messageMap: Map<string, Message>
+    messageMap: Map<string, Message>,
+    modelA?: string | null,
+    modelB?: string | null
   ) {
     // Validate message IDs exist in the conversation
     if (paneAId && messageMap.has(paneAId)) {
@@ -233,7 +266,14 @@ export const useSplitViewStore = defineStore('splitView', () => {
     if (focus === 'A' || focus === 'B') {
       focusedPane.value = focus
     }
-    
+    // Restore per-pane models
+    if (modelA) {
+      paneA.value.modelId = modelA
+    }
+    if (modelB) {
+      paneB.value.modelId = modelB
+    }
+
     // If we have valid pane params, enable split view
     if (paneA.value.activeMessageId && paneB.value.activeMessageId) {
       splitViewEnabled.value = true
@@ -247,13 +287,19 @@ export const useSplitViewStore = defineStore('splitView', () => {
     if (!splitViewEnabled.value) {
       return {}
     }
-    
+
     const params: Record<string, string> = {}
     if (paneA.value.activeMessageId) {
       params.paneA = paneA.value.activeMessageId
     }
     if (paneB.value.activeMessageId) {
       params.paneB = paneB.value.activeMessageId
+    }
+    if (paneA.value.modelId) {
+      params.modelA = paneA.value.modelId
+    }
+    if (paneB.value.modelId) {
+      params.modelB = paneB.value.modelId
     }
     params.focus = focusedPane.value
     return params
@@ -265,7 +311,9 @@ export const useSplitViewStore = defineStore('splitView', () => {
   function reset() {
     splitViewEnabled.value = false
     paneA.value.activeMessageId = null
+    paneA.value.modelId = null
     paneB.value.activeMessageId = null
+    paneB.value.modelId = null
     focusedPane.value = 'A'
     streamingPane.value = null
   }
@@ -291,6 +339,8 @@ export const useSplitViewStore = defineStore('splitView', () => {
     setFocusedPane,
     setPaneActiveMessage,
     setFocusedPaneActiveMessage,
+    getPaneModel,
+    setPaneModel,
     startPaneStreaming,
     stopPaneStreaming,
     swapPanes,

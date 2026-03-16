@@ -103,6 +103,7 @@ export {
 // Sync operations service
 export {
   appendOp,
+  safeAppendOp,
   getPendingOps,
   markAcked,
   getOpStats,

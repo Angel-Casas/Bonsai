@@ -62,10 +62,16 @@ test.describe('Conversation Branching E2E', () => {
     // 10. Verify branch title shows in timeline
     await expect(page.getByTestId('message-timeline')).toContainText('Alternative Branch')
 
+    // 10b. Verify the new branch appears in the Conversation Tree
+    const treeContainer = page.getByTestId('message-tree')
+    await expect(treeContainer).toContainText('Alternative Branch')
+
     // 11. Navigate back to original path using the tree
-    const thirdMsgNode = page.locator('[data-testid^="tree-node-"]').filter({ hasText: 'Third message' })
-    if (await thirdMsgNode.isVisible()) {
-      await thirdMsgNode.click()
+    // The tree shows branches. Find and click the non-alternative branch to go back.
+    // The original branch should show the preview text from "Second message"
+    const originalBranch = page.locator('[data-testid^="tree-node-"]').filter({ hasText: 'Second' })
+    if (await originalBranch.isVisible()) {
+      await originalBranch.click()
       await expect(page.getByTestId('message-timeline')).toContainText('Third message')
       await expect(page.getByTestId('message-timeline')).toContainText('Second message')
     }
@@ -135,7 +141,7 @@ test.describe('Conversation Branching E2E', () => {
     await expect(page.getByTestId('path-breadcrumbs')).toBeVisible()
   })
 
-  test('context builder: expand, view preview, exclude, and pin messages', async ({ page }) => {
+  test('context builder: expand, toggle messages, browse branches and filter', async ({ page }) => {
     await createConversation(page, { title: 'Context Control Test' })
 
     // Add messages to create a path
@@ -143,21 +149,7 @@ test.describe('Conversation Branching E2E', () => {
     await sendMessage(page, 'Second message on path')
     await sendMessage(page, 'Third message on path')
 
-    // Create a branch from root message (first user message, index 0)
-    await createBranchFromMessage(page, 0, { content: 'Alternate branch message' })
-
-    // Navigate back to third message via tree
-    const toggleBtn = page.getByTestId('toggle-sidebar-desktop-btn')
-    if (await toggleBtn.isVisible()) {
-      await toggleBtn.click()
-    }
-
-    // Find and click the third message node in tree
-    const thirdMsgNode = page.locator('[data-testid^="tree-node-"]').filter({ hasText: 'Third message' })
-    await expect(thirdMsgNode).toBeVisible({ timeout: 5000 })
-    await thirdMsgNode.click()
-
-    // Verify we're on the path with third message
+    // Verify we have the path with all three messages
     await expect(page.getByTestId('message-timeline')).toContainText('Third message on path')
 
     // Verify context builder toggle exists (collapsed state)
@@ -171,55 +163,58 @@ test.describe('Conversation Branching E2E', () => {
     const contextBuilderPanel = page.getByTestId('context-builder-panel')
     await expect(contextBuilderPanel).toBeVisible()
 
-    // Verify preview tab is active by default and shows path messages
-    const previewSection = page.getByTestId('context-preview')
-    await expect(previewSection).toBeVisible()
+    // Verify Current Path tab is active by default and shows path messages
+    const currentPathSection = page.getByTestId('context-current-path')
+    await expect(currentPathSection).toBeVisible()
 
-    // Preview should show our path messages (checking partial content is in the section)
-    await expect(previewSection).toContainText('Root')
-    await expect(previewSection).toContainText('Second')
-    await expect(previewSection).toContainText('Third')
+    // Current Path should show our path messages
+    await expect(currentPathSection).toContainText('Root')
+    await expect(currentPathSection).toContainText('Second')
+    await expect(currentPathSection).toContainText('Third')
 
-    // Switch to Path tab to test exclusion
-    await page.getByTestId('context-tab-path').click()
-    const pathConfig = page.getByTestId('context-path-config')
-    await expect(pathConfig).toBeVisible()
+    // Toggle buttons should exist for path messages
+    const toggleButtons = page.locator('[data-testid^="toggle-btn-"]')
+    const toggleCount = await toggleButtons.count()
+    expect(toggleCount).toBeGreaterThan(0)
 
-    // Find and click an exclude button for the second message
-    const excludeButtons = page.locator('[data-testid^="exclude-btn-"]')
-    const excludeCount = await excludeButtons.count()
-    expect(excludeCount).toBeGreaterThan(0)
-
-    // Click exclude on the second path item (index 1)
-    if (excludeCount > 1) {
-      await excludeButtons.nth(1).click()
+    // Click toggle on the second path item to exclude it
+    if (toggleCount > 1) {
+      await toggleButtons.nth(1).click()
     }
 
-    // Switch back to preview to verify exclusion took effect
-    await page.getByTestId('context-tab-preview').click()
-    await expect(previewSection).toBeVisible()
+    // Switch to All Branches tab
+    await page.getByTestId('context-tab-all-branches').click()
+    const branchesSection = page.getByTestId('context-all-branches')
+    await expect(branchesSection).toBeVisible()
 
-    // Switch to Pins tab
-    await page.getByTestId('context-tab-pins').click()
-    const pinsConfig = page.getByTestId('context-pins-config')
-    await expect(pinsConfig).toBeVisible()
+    // At least one branch group should exist
+    const branchGroups = page.locator('[data-testid^="branch-group-"]')
+    await expect(branchGroups.first()).toBeVisible()
 
-    // Search for the alternate branch message
-    const pinSearchInput = page.getByTestId('pin-search-input')
-    await expect(pinSearchInput).toBeVisible()
-    await pinSearchInput.fill('Alternate')
+    // Switch to All Messages tab
+    await page.getByTestId('context-tab-all-messages').click()
+    const allMessagesSection = page.getByTestId('context-all-messages')
+    await expect(allMessagesSection).toBeVisible()
 
-    // Wait for search results and click to pin
-    const pinResult = page.locator('[data-testid^="pin-result-"]').first()
-    await expect(pinResult).toBeVisible({ timeout: 3000 })
-    await pinResult.click()
+    // Filter buttons should be visible
+    const filterBar = page.getByTestId('all-messages-filter')
+    await expect(filterBar).toBeVisible()
+    await expect(page.getByTestId('filter-btn-all')).toBeVisible()
+    await expect(page.getByTestId('filter-btn-in-context')).toBeVisible()
+    await expect(page.getByTestId('filter-btn-not-in-context')).toBeVisible()
 
-    // Verify pinned item appears
-    const pinnedItem = page.locator('[data-testid^="pinned-item-"]').first()
-    await expect(pinnedItem).toBeVisible()
+    // Click the "Not in context" filter to show only excluded messages
+    await page.getByTestId('filter-btn-not-in-context').click()
+
+    // Click "All" filter to show everything again
+    await page.getByTestId('filter-btn-all').click()
 
     // Clear config using the reset button
     await page.getByTestId('clear-config-btn').click()
+
+    // Switch back to Current Path to verify reset worked
+    await page.getByTestId('context-tab-current-path').click()
+    await expect(currentPathSection).toBeVisible()
 
     // Collapse context builder
     await contextBuilderToggle.click()

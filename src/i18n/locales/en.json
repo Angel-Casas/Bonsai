@@ -28,8 +28,8 @@
         "buttonText": "See it in action"
       },
       "controlYourContext": {
-        "title": "Control Your Context",
-        "description": "Navigate between branches using the sidebar. Toggle individual messages in or out of the AI's context with a single click. Green means included, gray means excluded."
+        "title": "Context pruning",
+        "description": "Navigate between branches using the sidebar. Toggle individual messages in or out of the AI's context with a single click. This helps prevent hallucination problems and keeps the answers given more reliable."
       }
     },
     "continueButton": "Continue",
@@ -135,21 +135,21 @@
       },
       {
         "question": "Which models are supported?",
-        "answer": "Bonsai integrates with NanoGPT, giving you access to models like GPT-4o, Claude, and more. You can set a default model per conversation or override it for individual messages."
+        "answer": "Bonsai integrates with NanoGPT, giving you access to a vast number of models including OpenAI, Anthropic, Gemini, etc. Use one model for one branch of the conversation, and a different model for another branch using Split Mode."
       },
       {
         "question": "How does this reduce token cost?",
-        "answer": "By manually excluding irrelevant past messages (pruning), you send less text to the API. Since LLM providers charge by the token input, smaller context windows equal smaller bills."
+        "answer": "By manually excluding irrelevant past messages (context pruning), you send less tokens to the API. Since LLM providers charge by the token input, smaller context windows equal smaller bills."
       },
       {
         "question": "Can I export branches?",
-        "answer": "Yes. You can export any single branch as a markdown file, or the entire tree structure as a JSON file for backup or sharing."
+        "answer": "Yes. You can export entire conversations or individual branches, in either JSON (for backup and re-import) or Markdown (for reading and sharing)."
       }
     ]
   },
   "footer": {
     "cta": "Initialize Bonsai",
-    "tagline": "Local-first. Private. Yours.",
+    "tagline": "Local. Private. Yours.",
     "links": {
       "dataStored": "All data stored locally",
       "github": "GitHub",

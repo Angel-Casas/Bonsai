@@ -8,7 +8,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 
 export function useOnlineStatus() {
-  const isOnline = ref(navigator.onLine)
+  // Default to true if navigator.onLine is not supported
+  const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
 
   function handleOnline() {
     isOnline.value = true

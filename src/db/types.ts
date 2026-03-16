@@ -165,7 +165,7 @@ export type CreatePromptContextConfigInput = Omit<PromptContextConfig, 'resolved
 export type UpdatePromptContextConfigInput = Partial<Omit<PromptContextConfig, 'messageId'>>;
 
 // ============================================================================
-// Sync Operations (Milestone 16)
+// Sync Operations (Milestone 17)
 // ============================================================================
 
 /** Operation status for sync */

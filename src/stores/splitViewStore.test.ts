@@ -76,8 +76,9 @@ describe('splitViewStore', () => {
 
       expect(store.splitViewEnabled).toBe(false)
       expect(activeId).toBe('msg-b') // Focused pane was B
-      expect(store.paneA.activeMessageId).toBeNull()
-      expect(store.paneB.activeMessageId).toBeNull()
+      // Pane states are preserved for when split view is re-enabled
+      expect(store.paneA.activeMessageId).toBe('msg-a')
+      expect(store.paneB.activeMessageId).toBe('msg-b')
     })
   })
 
@@ -326,17 +327,20 @@ describe('splitViewStore', () => {
       expect(timeline).toEqual([])
     })
 
-    it('returns path to root for pane active message', () => {
+    it('returns full branch timeline including descendants', () => {
       const store = useSplitViewStore()
       const msg1 = createMockMessage('msg-1', null)
       const msg2 = createMockMessage('msg-2', 'msg-1')
       const msg3 = createMockMessage('msg-3', 'msg-2')
-      const messageMap = createMessageMap([msg1, msg2, msg3])
+      const msg4 = createMockMessage('msg-4', 'msg-3') // descendant
+      const messageMap = createMessageMap([msg1, msg2, msg3, msg4])
 
-      store.enableSplitView('msg-3')
+      store.enableSplitView('msg-1')
+      store.setPaneActiveMessage('A', 'msg-2') // Set active to msg-2
 
       const timeline = store.getPaneTimeline('A', messageMap)
-      expect(timeline.map(m => m.id)).toEqual(['msg-1', 'msg-2', 'msg-3'])
+      // Should include root to active (msg-1, msg-2) plus descendants (msg-3, msg-4)
+      expect(timeline.map(m => m.id)).toEqual(['msg-1', 'msg-2', 'msg-3', 'msg-4'])
     })
   })
 })

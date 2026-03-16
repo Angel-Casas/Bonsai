@@ -196,25 +196,6 @@ describe('resolveContext', () => {
       expect(result.pathMessages.map(m => m.id)).toEqual(['A', 'C', 'E']);
     });
 
-    it('warns for excluded messages not on path', () => {
-      const messages = [
-        createMessage('A', null, 'user', 'Root', '2024-01-01T00:00:00Z'),
-        createMessage('B', 'A', 'assistant', 'Response', '2024-01-01T00:01:00Z'),
-        createMessage('C', 'A', 'user', 'Other branch', '2024-01-01T00:02:00Z'),
-      ];
-      const map = createMessageMap(messages);
-      const config: ContextResolverConfig = {
-        startFromMessageId: null,
-        excludedMessageIds: ['C'], // Not on path to B
-        pinnedMessageIds: [],
-      };
-
-      const result = resolveContext('B', map, config);
-
-      expect(result.warnings).toHaveLength(1);
-      expect(result.warnings[0]?.type).toBe('EXCLUDED_MESSAGE_NOT_ON_PATH');
-      expect(result.warnings[0]?.relatedMessageId).toBe('C');
-    });
   });
 
   describe('pins', () => {
@@ -301,7 +282,7 @@ describe('resolveContext', () => {
       expect(result.pinnedMessages.map(m => m.id)).toEqual(['M', 'Z']);
     });
 
-    it('warns for pinned messages not found', () => {
+    it('reports stale pinned IDs for cleanup', () => {
       const messages = [
         createMessage('A', null, 'user', 'Root', '2024-01-01T00:00:00Z'),
       ];
@@ -309,14 +290,32 @@ describe('resolveContext', () => {
       const config: ContextResolverConfig = {
         startFromMessageId: null,
         excludedMessageIds: [],
-        pinnedMessageIds: ['X'], // Non-existent
+        pinnedMessageIds: ['X', 'Y'], // Non-existent
       };
 
       const result = resolveContext('A', map, config);
 
-      expect(result.warnings).toHaveLength(1);
-      expect(result.warnings[0]?.type).toBe('PINNED_MESSAGE_NOT_FOUND');
-      expect(result.warnings[0]?.relatedMessageId).toBe('X');
+      expect(result.warnings).toHaveLength(0);
+      expect(result.pinnedMessages).toHaveLength(0);
+      expect(result.stalePinnedIds).toEqual(['X', 'Y']);
+    });
+
+    it('returns empty stalePinnedIds when all pins are valid', () => {
+      const messages = [
+        createMessage('A', null, 'user', 'Root', '2024-01-01T00:00:00Z'),
+        createMessage('B', 'A', 'assistant', 'Response', '2024-01-01T00:01:00Z'),
+        createMessage('C', 'A', 'user', 'Other branch', '2024-01-01T00:02:00Z'),
+      ];
+      const map = createMessageMap(messages);
+      const config: ContextResolverConfig = {
+        startFromMessageId: null,
+        excludedMessageIds: [],
+        pinnedMessageIds: ['C'],
+      };
+
+      const result = resolveContext('B', map, config);
+
+      expect(result.stalePinnedIds).toEqual([]);
     });
   });
 

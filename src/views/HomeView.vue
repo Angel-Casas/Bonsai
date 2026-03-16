@@ -8,20 +8,23 @@
  * - Delete conversation (with confirmation)
  */
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useThemeStore } from '@/stores/themeStore'
+import { useTutorial } from '@/composables/useTutorial'
 import TopNavBar from '@/components/TopNavBar.vue'
-import GridBackground from '@/components/GridBackground.vue'
+import HalftoneBackground from '@/components/HalftoneBackground.vue'
 
 const router = useRouter()
 const store = useConversationStore()
 const themeStore = useThemeStore()
+const tutorial = useTutorial()
 
 // Local state
 const newConversationTitle = ref('')
 const showNewConversationInput = ref(false)
+const isCreating = ref(false)
 const editingConversationId = ref<string | null>(null)
 const editingTitle = ref('')
 const deletingConversationId = ref<string | null>(null)
@@ -32,14 +35,30 @@ const sortedConversations = computed(() => store.conversations)
 // Actions
 onMounted(async () => {
   await store.loadConversations()
+
+  // Auto-trigger Quick Setup for first-time users
+  nextTick(() => {
+    if (tutorial.shouldAutoTriggerQuickSetup()) {
+      tutorial.startTutorial('quick-setup')
+    }
+  })
 })
 
 async function createConversation() {
-  const title = newConversationTitle.value.trim() || 'New Conversation'
-  const conversation = await store.createNewConversation(title)
-  newConversationTitle.value = ''
-  showNewConversationInput.value = false
-  router.push({ name: 'conversation', params: { id: conversation.id } })
+  if (isCreating.value) return
+  isCreating.value = true
+
+  try {
+    const title = newConversationTitle.value.trim() || 'New Conversation'
+    const conversation = await store.createNewConversation(title)
+    newConversationTitle.value = ''
+    showNewConversationInput.value = false
+    router.push({ name: 'conversation', params: { id: conversation.id } })
+  } catch (error) {
+    console.error('Failed to create conversation:', error)
+  } finally {
+    isCreating.value = false
+  }
 }
 
 function startEditing(id: string, currentTitle: string) {
@@ -98,8 +117,8 @@ function formatDate(isoString: string): string {
 
 <template>
   <div class="home-page" :class="{ 'day-mode': themeStore.isDayMode }">
-    <!-- Grid Background -->
-    <GridBackground />
+    <!-- Halftone Background -->
+    <HalftoneBackground />
 
     <!-- Top Navigation Bar -->
     <TopNavBar />
@@ -126,19 +145,25 @@ function formatDate(isoString: string): string {
               v-model="newConversationTitle"
               data-testid="new-conversation-input"
               type="text"
+              inputmode="text"
+              enterkeyhint="done"
+              autocomplete="off"
               placeholder="Conversation title..."
               class="conversation-input"
-              @keyup.enter="createConversation"
+              @keydown.enter.prevent="createConversation"
               @keyup.escape="showNewConversationInput = false"
             />
             <button
               data-testid="create-conversation-btn"
+              type="button"
               class="action-btn primary"
+              :disabled="isCreating"
               @click="createConversation"
             >
-              Create
+              {{ isCreating ? 'Creating...' : 'Create' }}
             </button>
             <button
+              type="button"
               class="action-btn secondary"
               @click="showNewConversationInput = false"
             >
@@ -172,11 +197,13 @@ function formatDate(isoString: string): string {
             :key="conversation.id"
             :data-testid="`conversation-item-${conversation.id}`"
             class="conversation-card"
+            @click="openConversation(conversation.id)"
           >
             <!-- Delete Confirmation Overlay -->
             <div
               v-if="deletingConversationId === conversation.id"
               class="delete-overlay"
+              @click.stop
             >
               <div class="delete-content">
                 <p class="delete-message">Delete this conversation?</p>
@@ -200,7 +227,7 @@ function formatDate(isoString: string): string {
             </div>
 
             <!-- Edit Mode -->
-            <div v-if="editingConversationId === conversation.id" class="edit-form">
+            <div v-if="editingConversationId === conversation.id" class="edit-form" @click.stop>
               <input
                 v-model="editingTitle"
                 data-testid="edit-title-input"
@@ -226,37 +253,34 @@ function formatDate(isoString: string): string {
 
             <!-- Normal View -->
             <div v-else class="conversation-content">
-              <button
-                class="conversation-link"
-                @click="openConversation(conversation.id)"
-              >
-                <h3 class="conversation-title">{{ conversation.title }}</h3>
+              <div class="conversation-info">
+                <div class="title-row">
+                  <h3 class="conversation-title">{{ conversation.title }}</h3>
+                  <button
+                    :data-testid="`edit-btn-${conversation.id}`"
+                    class="title-edit-btn"
+                    title="Rename"
+                    @click.stop="startEditing(conversation.id, conversation.title)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon-xs" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                </div>
                 <p class="conversation-date">{{ formatDate(conversation.updatedAt) }}</p>
-              </button>
-
-              <!-- Action Buttons -->
-              <div class="conversation-actions">
-                <button
-                  :data-testid="`edit-btn-${conversation.id}`"
-                  class="icon-action-btn"
-                  title="Rename"
-                  @click.stop="startEditing(conversation.id, conversation.title)"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="icon-sm" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                  </svg>
-                </button>
-                <button
-                  :data-testid="`delete-btn-${conversation.id}`"
-                  class="icon-action-btn danger"
-                  title="Delete"
-                  @click.stop="confirmDelete(conversation.id)"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="icon-sm" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                  </svg>
-                </button>
               </div>
+
+              <!-- Delete Button -->
+              <button
+                :data-testid="`delete-btn-${conversation.id}`"
+                class="icon-action-btn danger"
+                title="Delete"
+                @click.stop="confirmDelete(conversation.id)"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon-sm" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -269,9 +293,9 @@ function formatDate(isoString: string): string {
 .home-page {
   min-height: 100vh;
   padding-top: 60px; /* Account for fixed navbar */
-  background: var(--bg-primary);
+  background: transparent;
   color: var(--text-primary);
-  transition: background 0.4s ease, color 0.4s ease;
+  transition: color 0.4s ease;
 }
 
 /* Main Content */
@@ -316,6 +340,20 @@ function formatDate(isoString: string): string {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 480px) {
+  .new-conversation-form .conversation-input {
+    flex: 1 1 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  .new-conversation-form .action-btn {
+    flex: 1;
+    min-height: 44px; /* Minimum touch target size */
+  }
 }
 
 .conversation-input {
@@ -342,6 +380,9 @@ function formatDate(isoString: string): string {
 
 /* Action Buttons */
 .action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.75rem 1.25rem;
   font-family: var(--font-sans);
   font-size: 0.9rem;
@@ -357,8 +398,13 @@ function formatDate(isoString: string): string {
   border: none;
 }
 
-.action-btn.primary:hover {
+.action-btn.primary:hover:not(:disabled) {
   box-shadow: var(--shadow-accent);
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .action-btn.secondary {
@@ -431,15 +477,22 @@ function formatDate(isoString: string): string {
 
 .conversation-card {
   position: relative;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   padding: 1rem 1.25rem;
   transition: all var(--transition-normal);
+  cursor: pointer;
 }
 
 .conversation-card:hover {
   border-color: var(--border-color);
+  background: var(--glass-bg-solid);
+}
+
+.conversation-card:active {
+  transform: scale(0.995);
 }
 
 /* Delete Overlay */
@@ -450,7 +503,7 @@ function formatDate(isoString: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.95);
+  background: var(--glass-bg-solid);
   border-radius: var(--radius-lg);
 }
 
@@ -482,7 +535,7 @@ function formatDate(isoString: string): string {
 }
 
 .delete-confirm-btn:hover {
-  background: #ef4444;
+  filter: brightness(1.1);
 }
 
 .delete-cancel-btn {
@@ -528,15 +581,18 @@ function formatDate(isoString: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
 }
 
-.conversation-link {
+.conversation-info {
   flex: 1;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
+  min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .conversation-title {
@@ -544,31 +600,59 @@ function formatDate(isoString: string): string {
   font-size: 1rem;
   font-weight: 500;
   color: var(--text-primary);
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   transition: color var(--transition-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.conversation-link:hover .conversation-title {
+.conversation-card:hover .conversation-title {
   color: var(--accent);
+}
+
+.title-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.conversation-card:hover .title-edit-btn {
+  opacity: 1;
+}
+
+.title-edit-btn:hover {
+  background: var(--overlay-light);
+  color: var(--accent);
+}
+
+/* Always show edit button on mobile (no hover) */
+@media (max-width: 768px) {
+  .title-edit-btn {
+    opacity: 0.6;
+  }
+
+  .title-edit-btn:active {
+    opacity: 1;
+    color: var(--accent);
+  }
 }
 
 .conversation-date {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--text-muted);
-  margin: 0;
-}
-
-/* Conversation Actions */
-.conversation-actions {
-  display: flex;
-  gap: 0.25rem;
-  opacity: 0;
-  transition: opacity var(--transition-normal);
-}
-
-.conversation-card:hover .conversation-actions {
-  opacity: 1;
+  margin: 0.25rem 0 0 0;
 }
 
 .icon-action-btn {
@@ -580,19 +664,40 @@ function formatDate(isoString: string): string {
   border-radius: var(--radius-md);
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   cursor: pointer;
   transition: all var(--transition-normal);
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.conversation-card:hover .icon-action-btn {
+  opacity: 1;
 }
 
 .icon-action-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay-light);
   color: var(--text-primary);
 }
 
 .icon-action-btn.danger:hover {
-  background: rgba(248, 113, 113, 0.1);
+  background: var(--error-bg);
   color: var(--error);
+}
+
+/* Always show action buttons on mobile (no hover) */
+@media (max-width: 768px) {
+  .icon-action-btn {
+    opacity: 0.6;
+  }
+
+  .icon-action-btn:active {
+    opacity: 1;
+  }
+
+  .icon-action-btn.danger:active {
+    color: var(--error);
+  }
 }
 
 /* Icons */
@@ -606,24 +711,8 @@ function formatDate(isoString: string): string {
   height: 1rem;
 }
 
-/* ============================================================================= */
-/* DAY MODE */
-/* ============================================================================= */
-.day-mode {
-  --bg-primary: #fff8f0;
-  --bg-secondary: rgba(255, 248, 240, 0.85);
-  --bg-card: #fff;
-  --bg-card-hover: #fef7ed;
-  --text-primary: #2d2a26;
-  --text-secondary: #6b6560;
-  --text-muted: rgba(45, 42, 38, 0.6);
-  --accent: #c4956a;
-  --accent-rgb: 196, 149, 106;
-  --accent-hover: #b8865c;
-  --border-color: rgba(196, 149, 106, 0.5);
-  --border-subtle: rgba(196, 149, 106, 0.25);
-  --border-muted: rgba(0, 0, 0, 0.08);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+.icon-xs {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 </style>

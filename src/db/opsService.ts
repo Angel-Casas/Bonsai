@@ -81,6 +81,40 @@ export async function appendOp(
 }
 
 /**
+ * Fire-and-forget op emission with failure tracking.
+ * On success, creates a pending op. On failure, records a failed op stub
+ * so diagnostics can surface the issue without blocking the user action.
+ */
+export async function safeAppendOp(
+  type: OpType,
+  payload: Record<string, unknown>,
+  conversationId?: string,
+  database: BonsaiDatabase = defaultDb
+): Promise<void> {
+  try {
+    await appendOp(type, payload, conversationId, database);
+  } catch (err) {
+    console.error('Op write failed:', err);
+    try {
+      const failedOp: SyncOp = {
+        id: generateId(),
+        createdAt: nowISO(),
+        conversationId: conversationId ?? null,
+        type,
+        payload: JSON.stringify(payload),
+        payloadEnc: null,
+        status: 'failed',
+        clientId: getOrCreateClientId(),
+        schemaVersion: OP_SCHEMA_VERSION,
+      };
+      await database.syncOps.add(failedOp);
+    } catch {
+      // If even the failure record can't be written, nothing more we can do
+    }
+  }
+}
+
+/**
  * Get pending operations, ordered by createdAt ASC then id ASC.
  */
 export async function getPendingOps(
@@ -135,10 +169,15 @@ export async function markAcked(
  */
 export async function getOpStats(
   database: BonsaiDatabase = defaultDb
-): Promise<{ pendingCount: number; latestTypes: string[] }> {
+): Promise<{ pendingCount: number; failedCount: number; latestTypes: string[] }> {
   const pendingCount = await database.syncOps
     .where('status')
     .equals('pending')
+    .count();
+
+  const failedCount = await database.syncOps
+    .where('status')
+    .equals('failed')
     .count();
 
   // Get latest 5 ops (any status) for type display
@@ -150,6 +189,7 @@ export async function getOpStats(
 
   return {
     pendingCount,
+    failedCount,
     latestTypes: latest.map((op) => op.type),
   };
 }

@@ -337,3 +337,58 @@ export function getOriginalOfVariant(
 
   return messageMap.get(variant.variantOfMessageId);
 }
+
+/**
+ * Get the main branch descendants of a message
+ * Follows the main branch (child without branchTitle) until reaching a leaf node
+ * or a point where all children are explicit branches.
+ *
+ * @param messageId - The starting message ID
+ * @param messageMap - Map of all messages in the conversation
+ * @returns Array of messages along the main branch (not including the starting message)
+ */
+export function getMainBranchDescendants(
+  messageId: string,
+  messageMap: Map<string, Message>
+): Message[] {
+  const descendants: Message[] = [];
+  const childrenMap = buildChildrenMap(messageMap);
+
+  let currentId: string | null = messageId;
+
+  while (currentId) {
+    const children: Message[] = childrenMap.get(currentId) ?? [];
+    if (children.length === 0) break;
+
+    // Find the main branch child (without branchTitle)
+    // If all children have branchTitle, stop - they are all explicit sub-branches
+    // that the user should select separately in the tree
+    const mainChild: Message | undefined = children.find((c: Message) => !c.branchTitle);
+    if (!mainChild) {
+      // All children are explicit branches - stop here
+      break;
+    }
+
+    descendants.push(mainChild);
+    currentId = mainChild.id;
+  }
+
+  return descendants;
+}
+
+/**
+ * Get the full timeline: path from root to message, plus main branch descendants
+ * This shows the complete conversation path through the selected message.
+ *
+ * @param messageId - The active/selected message ID
+ * @param messageMap - Map of all messages in the conversation
+ * @returns Array of messages from root to leaf (through the selected message)
+ */
+export function getFullBranchTimeline(
+  messageId: string,
+  messageMap: Map<string, Message>
+): Message[] {
+  const pathToRoot = getPathToRoot(messageId, messageMap);
+  const descendants = getMainBranchDescendants(messageId, messageMap);
+  return [...pathToRoot, ...descendants];
+}

@@ -126,10 +126,24 @@ describe('Repository CRUD Operations', () => {
         expect(updated?.updatedAt).toBeDefined();
       });
 
+      it('updates defaultModel and persists it', async () => {
+        const conv = await createConversation({ title: 'Test' }, db);
+        expect(conv.defaultModel).toBeUndefined();
+
+        // Update the default model
+        const updated = await updateConversation(conv.id, { defaultModel: 'gpt-4' }, db);
+        expect(updated?.defaultModel).toBe('gpt-4');
+
+        // Verify it persists when fetched again
+        const fetched = await getConversation(conv.id, db);
+        expect(fetched?.defaultModel).toBe('gpt-4');
+      });
+
       it('returns undefined for non-existent ID', async () => {
         const result = await updateConversation('nonexistent', { title: 'Test' }, db);
         expect(result).toBeUndefined();
       });
+
     });
 
     describe('deleteConversation', () => {

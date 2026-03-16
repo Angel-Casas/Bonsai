@@ -1,34 +1,90 @@
 <script setup lang="ts">
 /**
  * App Shell
- * 
- * Root component that includes:
- * - Router view for page navigation
- * - Global offline indicator banner
+ *
+ * Root component that provides the router view for page navigation.
+ * Also renders the settings overlay panel on top of any page.
  */
+import { onMounted, onUnmounted } from 'vue'
+import SettingsView from '@/views/SettingsView.vue'
+import ToastContainer from '@/components/ToastContainer.vue'
+import TutorialOverlay from '@/components/TutorialOverlay.vue'
+import { useSettingsPanel } from '@/composables/useSettingsPanel'
+import { useTutorial } from '@/composables/useTutorial'
 
-import { useOnlineStatus } from '@/composables/useOnlineStatus'
+const { isSettingsOpen, closeSettings } = useSettingsPanel()
+const tutorial = useTutorial()
 
-const { isOnline } = useOnlineStatus()
+function handleKeydown(e: KeyboardEvent) {
+  // Tutorial captures its own Escape via capture phase listener
+  if (tutorial.isActive.value) return
+  if (e.key === 'Escape' && isSettingsOpen.value) {
+    closeSettings()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
-  <!-- Offline Banner -->
-  <div
-    v-if="!isOnline"
-    class="fixed top-0 left-0 right-0 z-50 bg-yellow-600 px-4 py-2 text-center text-sm font-medium text-white"
-    data-testid="offline-banner"
-  >
-    <span class="inline-flex items-center gap-2">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-      </svg>
-      You're offline. Some features may be unavailable.
-    </span>
-  </div>
+  <RouterView />
 
-  <!-- Main Router View (with padding when offline banner is visible) -->
-  <div :class="{ 'pt-10': !isOnline }">
-    <RouterView />
-  </div>
+  <!-- Settings overlay panel -->
+  <Transition name="settings-fade">
+    <div
+      v-if="isSettingsOpen"
+      class="settings-overlay"
+      @click.self="closeSettings"
+    >
+      <div class="settings-panel">
+        <SettingsView @close="closeSettings" />
+      </div>
+    </div>
+  </Transition>
+
+  <ToastContainer />
+  <TutorialOverlay />
 </template>
+
+<style scoped>
+.settings-overlay {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  overflow-y: auto;
+}
+
+.settings-panel {
+  max-width: 42rem;
+  margin: 2rem auto;
+  padding: 0 1rem 2rem;
+}
+
+/* Fade + slide-up transition */
+.settings-fade-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.settings-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.settings-fade-enter-from {
+  opacity: 0;
+}
+.settings-fade-enter-from .settings-panel {
+  transform: translateY(12px);
+}
+.settings-fade-leave-to {
+  opacity: 0;
+}
+</style>

@@ -28,6 +28,7 @@ vi.mock('@/stores/themeStore', () => ({
 vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: vi.fn(),
+    afterEach: vi.fn(() => vi.fn()),
   }),
   useRoute: () => ({
     path: '/',
