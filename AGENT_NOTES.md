@@ -1885,7 +1885,7 @@ Each render creates a new reference, causing Vue to think the prop changed, trig
 - All 10 graph view E2E tests pass
 - No console errors when loading conversation with graph view active
 
-### 2026-02-13 — Milestone 16 (Sync-Ready Client Architecture)
+### 2026-02-13 — Milestone 17 (Sync-Ready Client Architecture)
 
 **Summary:**
 - Added append-only operations log (`syncOps` table) in IndexedDB schema v4
@@ -1933,3 +1933,38 @@ Each render creates a new reference, causing Vue to think the prop changed, trig
 - On connect, client pushes all pending ops; server responds with remote ops.
 - Import ops trigger "full state sync" rather than individual entity creation.
 - Encryption: server stores encrypted payloads as-is; decryption is client-side only.
+
+---
+
+### 2026-02-13 — Milestone 17 Reconciliation / Hygiene Pass
+
+**Summary:**
+- Fixed all ~50 `vue-tsc -b` type errors to achieve true Green Bar
+- Renumbered Milestone 16 → 17 across all docs, plan files, and code comments
+- Replaced `appendOp(...).catch(console.error)` with `safeAppendOp()` that records failed ops as `status: 'failed'`
+- Added `failedCount` to `getOpStats()` and surfaced "Failed Operations" in Settings Sync diagnostics
+- Added 4 new unit tests (safeAppendOp success, safeAppendOp never throws, failedCount in stats)
+
+**Type error fixes (vue-tsc):**
+- Removed unused imports: `hardDeleteMessage` (streamingService, conversationStore), `vi` (opsService.test), `onMounted`/`onUnmounted` (useGraphInteraction), `computed`/`ComputedRef`/`watch` (useGraphRenderer), `MAIN_BRANCH_COLOR` (GraphView)
+- Removed unused functions: `getBranchColor` (GraphView), `hexToRgba`/`handleSelect` (MessageTimeline), `isRangeOccupied` (graphLayout), `scrollToVisualization` (Landing)
+- Removed unused variable: `containerRef` (GraphView — template ref not read in script)
+- Removed unused computed: `pathIdSet` (contextResolver)
+- Fixed `null` vs `undefined` type mismatches: `deletedAt`, `branchTitle`, `variantOfMessageId` in graphSpatialIndex.test; `deletedAt` in conversationStore
+- Fixed possibly-undefined array access: added `!` assertions on `leaves[0]`, `leaves[i]`, `pathBranches[0]`, `path[path.length-1]`, `store.conversations[0]`, `colors[...]`, `event.touches[0]`
+- Fixed `getLeaves()` call from 2 args to 1 (signature changed in prior milestone)
+- Fixed `GraphSpatialIndex` ref type: `ref` → `shallowRef` (class with private fields can't be deeply reactive)
+- Prefixed unused function parameters with `_`: event params in interaction handlers, draw function params in renderer
+- Added tuple return type to `lerpColor`'s parse helper: `[number, number, number]`
+
+**Op emission reliability (safeAppendOp):**
+- `safeAppendOp()` wraps `appendOp()` in try/catch
+- On failure: logs error, then attempts to write a stub op with `status: 'failed'`
+- If the fallback write also fails, silently continues (never throws)
+- All 11 `appendOp` call sites in conversationStore + 1 in exportImport migrated
+- Settings Sync diagnostics now shows "Failed Operations: N" (red when > 0)
+
+**Final check outputs:**
+- `npm test`: 445 passed (was 441, +4 new tests)
+- `npm run test:e2e`: 76 passed
+- `npx vue-tsc -b`: 0 errors

@@ -1,4 +1,4 @@
-# Milestone 16: Sync-Ready Ops Log — Implementation Plan
+# Milestone 17: Sync-Ready Ops Log — Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -23,7 +23,7 @@ After line 165 (end of file), add:
 
 ```typescript
 // ============================================================================
-// Sync Operations (Milestone 16)
+// Sync Operations (Milestone 17)
 // ============================================================================
 
 /** Operation status for sync */
@@ -1157,12 +1157,12 @@ git commit -m "test(sync): add e2e test for sync diagnostics in Settings"
 - Modify: `PROJECT_STATUS.md`
 - Modify: `AGENT_NOTES.md`
 
-**Step 1: Add Milestone 16 to PROJECT_STATUS.md**
+**Step 1: Add Milestone 17 to PROJECT_STATUS.md**
 
 After the Milestone 15 section and before "### Post-MVP", add:
 
 ```markdown
-### Milestone 16 — Sync-Ready Client Architecture
+### Milestone 17 — Sync-Ready Client Architecture
 Status: ✅ Done
 - [x] Append-only operations log in IndexedDB (syncOps table, schema v4)
 - [x] Op types: conversation.create/rename/delete, message.create/edit/deleteSubtree/createVariant, import.completed
@@ -1190,7 +1190,7 @@ Also update the "Next Actions" section at the bottom of PROJECT_STATUS.md.
 Append a new entry at the end of the file:
 
 ```markdown
-### 2026-02-13 — Milestone 16 (Sync-Ready Client Architecture)
+### 2026-02-13 — Milestone 17 (Sync-Ready Client Architecture)
 
 **Summary:**
 - Added append-only operations log (`syncOps` table) in IndexedDB schema v4
@@ -1244,7 +1244,7 @@ Append a new entry at the end of the file:
 
 ```bash
 git add PROJECT_STATUS.md AGENT_NOTES.md
-git commit -m "docs: update PROJECT_STATUS.md and AGENT_NOTES.md for Milestone 16"
+git commit -m "docs: update PROJECT_STATUS.md and AGENT_NOTES.md for Milestone 17"
 ```
 
 ---

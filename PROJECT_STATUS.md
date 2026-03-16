@@ -22,7 +22,7 @@
 
 ## Current Date / Context
 - Today: 2026-02-13
-- Notes: Milestone 16 complete. Sync-ready client architecture with append-only ops log, encryption at rest, and SyncAdapter abstraction.
+- Notes: Milestone 16 complete. Sync-ready client architecture with append-only ops log, encryption at rest, SyncAdapter abstraction. Reconciliation pass: all vue-tsc errors fixed, op emission uses safeAppendOp with failure tracking.
 
 ## Definition of Done (Green Bar Rule)
 A milestone is **not complete** unless:
@@ -354,7 +354,7 @@ Notes / decisions:
 Status: ✅ Done
 - [x] Append-only operations log in IndexedDB (syncOps table, schema v4)
 - [x] Op types: conversation.create/rename/delete, message.create/edit/deleteSubtree/createVariant, import.completed
-- [x] Ops emitted from store actions (fire-and-forget, non-blocking)
+- [x] Ops emitted from store actions (safeAppendOp with failure tracking, non-blocking)
 - [x] Op payloads encrypted at rest when encryption enabled (AES-GCM, same service)
 - [x] SyncAdapter interface with LocalOnlySyncAdapter implementation
 - [x] Sync diagnostics section in Settings (pending count, latest ops, client ID)
@@ -367,7 +367,7 @@ Notes / decisions:
 - **Import strategy**: Single `import.completed` op (Approach A) — server treats import as new baseline.
 - **Canonical ordering**: createdAt ASC, id ASC documented as canonical for future replay.
 - **Client ID**: UUID in localStorage at `bonsai:sync:clientId`, generated once per device.
-- **Non-blocking**: Op writes use `.catch(console.error)` — failures logged but don't block user actions.
+- **Non-blocking**: Op writes use `safeAppendOp()` — failures recorded as `status: 'failed'` for diagnostics, never block user actions.
 - **Schema**: syncOps table with indices on id, status, createdAt, [conversationId+createdAt].
 
 ### Post-MVP
@@ -633,7 +633,7 @@ To update: change the `href` attribute on the nano-gpt.com link.
 ---
 
 ## Next Actions (agent should update each time)
-- Current milestone: Milestone 16 (complete) — Sync-Ready Client Architecture
+- Current milestone: Milestone 16 (complete, reconciled) — Sync-Ready Client Architecture
 - Next 1–3 tasks:
   1. Build Bonsai Sync server (receives ops, broadcasts to clients)
   2. Implement RemoteSyncAdapter (pushes ops to server, receives remote ops)

@@ -1,4 +1,4 @@
-# Milestone 16 — Sync-Ready Client Architecture: Design
+# Milestone 17 — Sync-Ready Client Architecture: Design
 
 **Date:** 2026-02-13
 **Status:** Approved
@@ -157,7 +157,7 @@ A "Sync (coming soon)" section in Settings showing:
 - `src/views/SettingsView.vue` — sync diagnostics section
 
 ### Documentation:
-- `PROJECT_STATUS.md` — Milestone 16 entry
+- `PROJECT_STATUS.md` — Milestone 17 entry
 - `AGENT_NOTES.md` — design rationale appendix
 
 ---
