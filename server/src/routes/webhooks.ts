@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { db } from '../db/connection'
-import { subscriptions } from '../db/schema'
-import { verifyWebhookSignature } from '../services/btcpay'
-import { getPeriodEnd, type Plan } from '../services/subscription'
+import { db } from '../db/connection.js'
+import { subscriptions } from '../db/schema.js'
+import { verifyWebhookSignature } from '../services/btcpay.js'
+import { getPeriodEnd, type Plan } from '../services/subscription.js'
 
 const webhooks = new Hono()
 

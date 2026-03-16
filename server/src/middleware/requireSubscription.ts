@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
-import { isSubscriptionActive } from '../services/subscription'
+import { isSubscriptionActive } from '../services/subscription.js'
 
 type SubscriptionLookup = (userId: string) => Promise<{ status: string; currentPeriodEnd: Date } | null>
 

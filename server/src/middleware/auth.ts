@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
-import { verifyAccessToken } from '../services/jwt'
+import { verifyAccessToken } from '../services/jwt.js'
 
 declare module 'hono' {
   interface ContextVariableMap {

@@ -104,7 +104,7 @@ describe('RemoteSyncAdapter', () => {
 
       await adapter.pushPendingOps();
 
-      const callArgs = mockFetch.mock.calls[0];
+      const callArgs = mockFetch.mock.calls[0]!;
       const body = JSON.parse(callArgs[1].body);
       expect(body.ops).toHaveLength(1);
       expect(body.ops[0]).toEqual({
@@ -135,7 +135,7 @@ describe('RemoteSyncAdapter', () => {
 
       await adapter.pushPendingOps();
 
-      const callArgs = mockFetch.mock.calls[0];
+      const callArgs = mockFetch.mock.calls[0]!;
       const body = JSON.parse(callArgs[1].body);
       expect(body.ops[0].encryptedPayload).toBe(
         btoa(JSON.stringify({ ciphertext: 'abc123', iv: 'def456' })),

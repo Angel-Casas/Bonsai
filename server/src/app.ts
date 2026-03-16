@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import auth from './routes/auth'
-import subs from './routes/subscriptions'
-import webhooks from './routes/webhooks'
-import sync from './routes/sync'
+import auth from './routes/auth.js'
+import subs from './routes/subscriptions.js'
+import webhooks from './routes/webhooks.js'
+import sync from './routes/sync.js'
 
 const app = new Hono()
 

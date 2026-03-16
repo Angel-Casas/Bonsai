@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { eq, and, desc } from 'drizzle-orm'
-import { db } from '../db/connection'
-import { subscriptions } from '../db/schema'
-import { authMiddleware } from '../middleware/auth'
-import { createInvoice } from '../services/btcpay'
-import { PLAN_PRICES, type Plan } from '../services/subscription'
+import { db } from '../db/connection.js'
+import { subscriptions } from '../db/schema.js'
+import { authMiddleware } from '../middleware/auth.js'
+import { createInvoice } from '../services/btcpay.js'
+import { PLAN_PRICES, type Plan } from '../services/subscription.js'
 
 const subs = new Hono()
 

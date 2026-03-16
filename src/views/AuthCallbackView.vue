@@ -19,7 +19,7 @@ onMounted(() => {
 
   try {
     const parts = accessToken.split('.')
-    const payload = JSON.parse(atob(parts[1]))
+    const payload = JSON.parse(atob(parts[1]!))
     authStore.setAuth({
       accessToken,
       refreshToken,

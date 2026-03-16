@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { eq, and, gt, ne, desc } from 'drizzle-orm'
-import { db } from '../db/connection'
-import { syncOps, subscriptions } from '../db/schema'
-import { authMiddleware } from '../middleware/auth'
-import { createRequireSubscription } from '../middleware/requireSubscription'
+import { db } from '../db/connection.js'
+import { syncOps, subscriptions } from '../db/schema.js'
+import { authMiddleware } from '../middleware/auth.js'
+import { createRequireSubscription } from '../middleware/requireSubscription.js'
 
 const sync = new Hono()
 

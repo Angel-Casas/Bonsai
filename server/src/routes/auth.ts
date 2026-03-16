@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
-import { db } from '../db/connection'
-import { users, magicLinks, sessions } from '../db/schema'
-import { signAccessToken, signRefreshToken } from '../services/jwt'
-import { sendMagicLinkEmail } from '../services/email'
+import { db } from '../db/connection.js'
+import { users, magicLinks, sessions } from '../db/schema.js'
+import { signAccessToken, signRefreshToken } from '../services/jwt.js'
+import { sendMagicLinkEmail } from '../services/email.js'
 
 const auth = new Hono()
 
