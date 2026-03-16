@@ -4,12 +4,19 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // Zero retries for determinism - tests should be stable
+  retries: 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  // Output both HTML and JSON reports (JSON for skip detection)
+  reporter: process.env.CI
+    ? [['html'], ['json', { outputFile: 'test-results.json' }]]
+    : 'html',
   use: {
     baseURL: 'http://localhost:5180',
-    trace: 'on-first-retry',
+    // Capture traces, screenshots, and video on failure for debugging
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
   projects: [
     {

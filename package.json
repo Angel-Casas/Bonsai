@@ -1,8 +1,11 @@
 {
   "name": "bonsai-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
@@ -12,6 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:ci": "playwright test && node scripts/check-e2e-no-skip.js",
+    "check:no-skip": "bash scripts/check-no-skip.sh",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
@@ -19,8 +24,11 @@
   },
   "dependencies": {
     "dexie": "^4.2.1",
+    "motion-v": "^1.10.3",
+    "p5": "^2.2.0",
     "pinia": "^3.0.4",
     "three": "^0.182.0",
+    "vanta": "^0.5.24",
     "vue": "^3.5.24",
     "vue-i18n": "^11.2.8",
     "vue-router": "^4.6.4"

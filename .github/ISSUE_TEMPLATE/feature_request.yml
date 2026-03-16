@@ -1,0 +1,74 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for Bonsai
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Privacy Reminder
+        **Do NOT include your NanoGPT API key or private conversation content in this request.**
+
+        Thank you for suggesting a feature! Please fill out the sections below to help us understand your idea.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Is your feature request related to a problem? Please describe the use case.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the solution you'd like to see.
+      placeholder: Describe your ideal solution...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: Describe alternatives you've considered...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context, mockups, or screenshots about the feature request here.
+      placeholder: Any additional information...
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug-info
+    attributes:
+      label: Debug Info (optional)
+      description: |
+        If relevant, paste the output from Settings > Support > "Copy Debug Info" here.
+      placeholder: |
+        Bonsai Debug Info
+        ==================
+        App Version: ...
+        ...
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: privacy-check
+    attributes:
+      label: Privacy Checklist
+      description: Please confirm before submitting
+      options:
+        - label: I have NOT included my NanoGPT API key in this request
+          required: true
+        - label: I have NOT included private conversation content in this request
+          required: true

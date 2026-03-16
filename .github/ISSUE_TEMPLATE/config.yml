@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/Angel-Casas/Bonsai/discussions
+    about: Ask questions or discuss ideas in the community forum
+  - name: Security Vulnerability
+    url: https://github.com/Angel-Casas/Bonsai/security/advisories/new
+    about: Report a security vulnerability privately
