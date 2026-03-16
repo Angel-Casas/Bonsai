@@ -14,17 +14,11 @@
  */
 
 import type { SyncAdapter } from './syncAdapter';
-import type { SyncOp } from './types';
+import type { RemoteOp, SyncOp } from './types';
 import { getPendingOps, markAcked } from './opsService';
 
-/** Shape returned by GET /sync/pull for each op */
-export interface RemoteOp {
-  id: string;
-  clientId: string;
-  encryptedPayload: string; // base64
-  conversationId: string | null;
-  createdAt: string;
-}
+// Re-export RemoteOp so existing consumers that import from this module still work
+export type { RemoteOp } from './types';
 
 const PUSH_BATCH_LIMIT = 50;
 

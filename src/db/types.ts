@@ -207,3 +207,40 @@ export interface SyncOp {
   /** Schema version of this op format (start at 1) */
   schemaVersion: number;
 }
+
+// ============================================================================
+// Conflict Resolution (Milestone 17 – multi-device sync)
+// ============================================================================
+
+/** Conflict classification between a remote op and a local pending op */
+export type ConflictType =
+  | 'edit-vs-edit'
+  | 'edit-vs-delete'
+  | 'rename-vs-rename'
+  | 'rename-vs-delete'
+  | 'create-vs-delete'
+
+/** Wire format for ops received from server */
+export interface RemoteOp {
+  id: string
+  clientId: string
+  encryptedPayload: string
+  conversationId: string | null
+  createdAt: string
+}
+
+/** A detected conflict between a remote op and a local pending op */
+export interface ConflictPair {
+  remote: RemoteOp
+  local: SyncOp
+  type: ConflictType
+}
+
+/** How the user resolved a conflict */
+export type Resolution = 'keep-local' | 'keep-remote' | 'keep-both'
+
+/** A conflict with its user-chosen resolution */
+export interface ResolvedConflict {
+  pair: ConflictPair
+  resolution: Resolution
+}
