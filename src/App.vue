@@ -9,11 +9,14 @@ import { onMounted, onUnmounted } from 'vue'
 import SettingsView from '@/views/SettingsView.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import TutorialOverlay from '@/components/TutorialOverlay.vue'
+import ConflictResolver from '@/components/ConflictResolver.vue'
 import { useSettingsPanel } from '@/composables/useSettingsPanel'
 import { useTutorial } from '@/composables/useTutorial'
+import { useSync } from '@/composables/useSync'
 
 const { isSettingsOpen, closeSettings } = useSettingsPanel()
 const tutorial = useTutorial()
+const { pendingConflicts, resolveConflicts } = useSync()
 
 function handleKeydown(e: KeyboardEvent) {
   // Tutorial captures its own Escape via capture phase listener
@@ -47,6 +50,12 @@ onUnmounted(() => {
       </div>
     </div>
   </Transition>
+
+  <ConflictResolver
+    v-if="pendingConflicts.length > 0"
+    :conflicts="pendingConflicts"
+    @resolved="resolveConflicts"
+  />
 
   <ToastContainer />
   <TutorialOverlay />
