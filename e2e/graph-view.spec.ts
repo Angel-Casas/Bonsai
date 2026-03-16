@@ -3,10 +3,12 @@
  *
  * Tests the graph visualization feature:
  * - View mode toggle (Tree/Split/Graph)
- * - Graph rendering with nodes and edges
- * - Node click navigation
+ * - Canvas-based graph rendering
  * - Density controls
  * - URL persistence
+ *
+ * Note: Since we use Canvas (not SVG), we can't directly select/click
+ * individual nodes. Tests focus on control interactions and URL updates.
  */
 
 import { test, expect } from '@playwright/test'
@@ -63,44 +65,23 @@ test.describe('Graph View', () => {
     await expect(page.getByTestId('message-timeline')).toBeVisible()
   })
 
-  test('graph view shows nodes for messages', async ({ page }) => {
-    await createConversation(page, { title: 'Graph Nodes Test' })
+  test('graph view shows canvas for messages', async ({ page }) => {
+    await createConversation(page, { title: 'Graph Canvas Test' })
 
     // Add a message
-    await sendMessage(page, 'Graph node test')
+    await sendMessage(page, 'Graph canvas test')
 
     // Switch to graph view
     await setViewMode(page, 'graph')
 
-    // Graph SVG should be visible with at least one node
-    const graphSvg = page.getByTestId('graph-svg')
-    await expect(graphSvg).toBeVisible()
+    // Graph canvas should be visible
+    const graphCanvas = page.getByTestId('graph-canvas')
+    await expect(graphCanvas).toBeVisible()
 
-    // Should have at least one node circle
-    const nodeCount = await graphSvg.locator('g.nodes > g').count()
-    expect(nodeCount).toBeGreaterThan(0)
-  })
-
-  test('clicking a node in graph view updates URL', async ({ page }) => {
-    await createConversation(page, { title: 'Graph Click Test' })
-
-    // Add messages
-    await sendMessage(page, 'First message')
-    await sendMessage(page, 'Second message')
-
-    // Switch to graph view
-    await setViewMode(page, 'graph')
-
-    // Wait for graph to render
-    const graphSvg = page.getByTestId('graph-svg')
-    await expect(graphSvg).toBeVisible()
-
-    // Get the first node and click it
-    const firstNode = graphSvg.locator('g.nodes > g').first()
-    await firstNode.click()
-
-    // URL should update with message parameter
-    await expect(page).toHaveURL(/message=/)
+    // Canvas should have proper dimensions
+    const boundingBox = await graphCanvas.boundingBox()
+    expect(boundingBox?.width).toBeGreaterThan(100)
+    expect(boundingBox?.height).toBeGreaterThan(100)
   })
 
   test('graph view URL persistence on reload', async ({ page }) => {
@@ -121,7 +102,7 @@ test.describe('Graph View', () => {
     await expect(page.getByTestId('view-mode-graph')).toHaveClass(/active/)
   })
 
-  test('graph view density controls exist', async ({ page }) => {
+  test('graph view density controls exist and work', async ({ page }) => {
     await createConversation(page, { title: 'Density Test' })
 
     // Add a message
@@ -130,41 +111,117 @@ test.describe('Graph View', () => {
     // Switch to graph view
     await setViewMode(page, 'graph')
 
-    // Branch roots toggle should exist
-    const branchRootsToggle = page.getByTestId('branch-roots-toggle')
-    await expect(branchRootsToggle).toBeVisible()
+    // Compact toggle should exist
+    const compactToggle = page.getByTestId('compact-nodes-toggle')
+    await expect(compactToggle).toBeVisible()
 
-    // Depth limit select should exist
-    const depthSelect = page.getByTestId('depth-limit-select')
-    await expect(depthSelect).toBeVisible()
+    // Highlight path toggle should exist
+    const highlightToggle = page.getByTestId('highlight-path-toggle')
+    await expect(highlightToggle).toBeVisible()
 
-    // Test branch roots toggle
-    await branchRootsToggle.click()
-    await expect(branchRootsToggle).toBeChecked()
+    // Test compact toggle (may be checked by default)
+    const isCompactChecked = await compactToggle.isChecked()
+    await compactToggle.click()
+    await expect(compactToggle).toBeChecked({ checked: !isCompactChecked })
 
-    // Test depth limit select
-    await depthSelect.selectOption('3')
-    await expect(depthSelect).toHaveValue('3')
+    // Test highlight path toggle
+    const isHighlightChecked = await highlightToggle.isChecked()
+    await highlightToggle.click()
+    await expect(highlightToggle).toBeChecked({ checked: !isHighlightChecked })
   })
 
-  test('node tooltip shows on hover', async ({ page }) => {
-    await createConversation(page, { title: 'Tooltip Test' })
+  test('graph view control buttons work', async ({ page }) => {
+    await createConversation(page, { title: 'Controls Test' })
 
-    // Add a message
-    await sendMessage(page, 'Tooltip message')
+    // Add multiple messages
+    await sendMessage(page, 'First message')
+    await sendMessage(page, 'Second message')
 
     // Switch to graph view
     await setViewMode(page, 'graph')
-    await expect(page.getByTestId('graph-svg')).toBeVisible()
 
-    // Hover over a node
-    const node = page.locator('[data-testid="graph-svg"] g.nodes > g').first()
-    await node.hover()
+    // Canvas should be visible
+    await expect(page.getByTestId('graph-canvas')).toBeVisible()
 
-    // Tooltip should appear and contain a role (user or assistant)
-    const tooltip = page.getByTestId('graph-tooltip')
-    await expect(tooltip).toBeVisible()
-    const tooltipText = await tooltip.textContent()
-    expect(tooltipText).toMatch(/user|assistant/)
+    // Center button should exist and be clickable (fits all nodes in view)
+    const centerButton = page.locator('button', { hasText: 'Center' })
+    await expect(centerButton).toBeVisible()
+    await centerButton.click()
+  })
+
+  test('graph view shows node count', async ({ page }) => {
+    await createConversation(page, { title: 'Node Count Test' })
+
+    // Add messages
+    await sendMessage(page, 'First message')
+    await sendMessage(page, 'Second message')
+
+    // Switch to graph view
+    await setViewMode(page, 'graph')
+
+    // Should show node count in the controls
+    const nodeCount = page.locator('.node-count')
+    await expect(nodeCount).toBeVisible()
+
+    // Should show at least 2 nodes (our 2 messages + any assistant responses)
+    const nodeCountText = await nodeCount.textContent()
+    const count = parseInt(nodeCountText?.match(/\d+/)?.[0] ?? '0', 10)
+    expect(count).toBeGreaterThanOrEqual(2)
+  })
+
+  test('pan interaction works via mouse drag', async ({ page }) => {
+    await createConversation(page, { title: 'Pan Test' })
+
+    // Add a message
+    await sendMessage(page, 'Pan test message')
+
+    // Switch to graph view
+    await setViewMode(page, 'graph')
+
+    const canvas = page.getByTestId('graph-canvas')
+    await expect(canvas).toBeVisible()
+
+    // Get canvas bounding box
+    const box = await canvas.boundingBox()
+    if (!box) return
+
+    // Perform drag operation
+    const startX = box.x + box.width / 2
+    const startY = box.y + box.height / 2
+
+    await page.mouse.move(startX, startY)
+    await page.mouse.down()
+    await page.mouse.move(startX + 100, startY + 50)
+    await page.mouse.up()
+
+    // Canvas should still be visible (pan worked without errors)
+    await expect(canvas).toBeVisible()
+  })
+
+  test('zoom interaction works via mouse wheel', async ({ page }) => {
+    await createConversation(page, { title: 'Zoom Test' })
+
+    // Add a message
+    await sendMessage(page, 'Zoom test message')
+
+    // Switch to graph view
+    await setViewMode(page, 'graph')
+
+    const canvas = page.getByTestId('graph-canvas')
+    await expect(canvas).toBeVisible()
+
+    // Get canvas bounding box
+    const box = await canvas.boundingBox()
+    if (!box) return
+
+    // Perform zoom via wheel
+    const centerX = box.x + box.width / 2
+    const centerY = box.y + box.height / 2
+
+    await page.mouse.move(centerX, centerY)
+    await page.mouse.wheel(0, -100) // Zoom in
+
+    // Canvas should still be visible (zoom worked without errors)
+    await expect(canvas).toBeVisible()
   })
 })

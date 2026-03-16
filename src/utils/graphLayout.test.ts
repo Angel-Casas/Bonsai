@@ -159,6 +159,7 @@ describe('filterMessages', () => {
       branchRootsOnly: false,
       maxDepth: null,
       collapseLinearChains: false,
+      compactNodes: false,
     }
 
     const result = filterMessages(messages, options, childrenMap, messageMap)
@@ -172,6 +173,7 @@ describe('filterMessages', () => {
       branchRootsOnly: false,
       maxDepth: 2,
       collapseLinearChains: false,
+      compactNodes: false,
     }
 
     const result = filterMessages(messages, options, childrenMap, messageMap)
@@ -190,6 +192,7 @@ describe('filterMessages', () => {
       branchRootsOnly: true,
       maxDepth: null,
       collapseLinearChains: false,
+      compactNodes: false,
     }
 
     const result = filterMessages(messages, options, childrenMap, messageMap)
