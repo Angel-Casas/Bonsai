@@ -165,6 +165,17 @@ export async function markAcked(
 }
 
 /**
+ * Discard (delete) a pending op by its ID.
+ * If the op does not exist, this is a no-op.
+ */
+export async function discardOp(
+  opId: string,
+  database: BonsaiDatabase = defaultDb
+): Promise<void> {
+  await database.syncOps.delete(opId);
+}
+
+/**
  * Get sync diagnostics: pending count and latest op types.
  */
 export async function getOpStats(

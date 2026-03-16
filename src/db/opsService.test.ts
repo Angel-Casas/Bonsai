@@ -13,6 +13,7 @@ import {
   getPendingOps,
   markAcked,
   getOpStats,
+  discardOp,
 } from './opsService';
 
 const CLIENT_ID_KEY = 'bonsai:sync:clientId';
@@ -329,6 +330,28 @@ describe('opsService', () => {
       const stats = await getOpStats(db);
       expect(stats.pendingCount).toBe(1);
       expect(stats.failedCount).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // discardOp
+  // ==========================================================================
+
+  describe('discardOp', () => {
+    it('deletes a pending op by id', async () => {
+      const op = await appendOp('conversation.create', { title: 'temp' }, undefined, db);
+      const pendingBefore = await getPendingOps(undefined, db);
+      expect(pendingBefore.length).toBe(1);
+
+      await discardOp(op.id, db);
+
+      const pendingAfter = await getPendingOps(undefined, db);
+      expect(pendingAfter).toEqual([]);
+    });
+
+    it('does nothing if op does not exist', async () => {
+      // Should not throw when discarding a non-existent op
+      await expect(discardOp('non-existent-id', db)).resolves.toBeUndefined();
     });
   });
 
