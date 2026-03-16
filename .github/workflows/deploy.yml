@@ -41,6 +41,7 @@ jobs:
       - name: Build with GitHub Pages base path
         env:
           VITE_BASE_PATH: /Bonsai/
+          VITE_SYNC_SERVER_URL: https://bonsai-sync-production.up.railway.app
         run: npm run build
 
       - name: Setup Pages
