@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import BlueprintLanding from './landing/BlueprintLanding.vue'
+import Landing from './landing/Landing.vue'
 </script>
 
 <template>
-  <BlueprintLanding />
+  <Landing />
 </template>

@@ -9,9 +9,11 @@
 import { ref } from 'vue';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { useRouter } from 'vue-router';
+import { useSettingsPanel } from '@/composables/useSettingsPanel';
 
 const encryptionStore = useEncryptionStore();
 const router = useRouter();
+const { openSettings } = useSettingsPanel();
 
 const passphrase = ref('');
 const showPassphrase = ref(false);
@@ -47,19 +49,25 @@ async function handleUnlock() {
 }
 
 function goToSettings() {
-  router.push('/settings');
+  openSettings();
 }
 </script>
 
 <template>
-  <div class="lock-screen">
+  <div class="lock-screen" data-testid="lock-screen">
     <div class="lock-container">
+      <div class="lock-status-badge">
+        <span class="status-icon">🔒</span>
+        <span class="status-text">ENCRYPTED & LOCKED</span>
+      </div>
+
       <div class="lock-icon">🔐</div>
-      
+
       <h1>Bonsai is Locked</h1>
-      
+
       <p class="lock-description">
-        Your data is encrypted. Enter your passphrase to unlock.
+        Your conversations are protected with encryption.<br/>
+        Enter your passphrase to view and access your data.
       </p>
 
       <form class="unlock-form" @submit.prevent="handleUnlock">
@@ -134,6 +142,28 @@ function goToSettings() {
   width: 100%;
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.lock-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(100, 181, 246, 0.15);
+  border: 1px solid rgba(100, 181, 246, 0.3);
+  border-radius: 2rem;
+  padding: 0.375rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-icon {
+  font-size: 0.875rem;
+}
+
+.status-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #64b5f6;
 }
 
 .lock-icon {

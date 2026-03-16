@@ -1,19 +1,23 @@
 <script setup lang="ts">
 /**
- * MessageTree - Hierarchical tree view of messages
+ * MessageTree - Conversation tree showing branches
  *
- * Renders the message tree with:
- * - Indentation to show hierarchy
- * - Branch titles where applicable
- * - Visual indicators for current path
- * - Click to select/navigate
- * - Collapse/expand state for performance
- * - "Collapse all" and "Expand to active path" controls
+ * Displays a compact tree of conversation branches:
+ * - Main conversation path
+ * - Branch points where alternatives exist
+ * - Click to navigate to any branch
+ * - Supports infinite nesting depth
  */
 
-import { ref, computed, watch, provide } from 'vue'
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import type { Message } from '@/db/types'
-import MessageTreeNode from '@/components/MessageTreeNode.vue'
+import { BRANCH_COLORS } from '@/utils/graphLayout'
+import BranchNode from './BranchNode.vue'
+import { useConversationStore } from '@/stores/conversationStore'
+
+const conversationStore = useConversationStore()
+const { excludedMessageIds } = storeToRefs(conversationStore)
 
 const props = defineProps<{
   messages: Message[]
@@ -26,249 +30,355 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [messageId: string]
+  'delete-branch': [branchId: string, depth: number]
+  'rename-branch': [branchId: string, newTitle: string]
 }>()
 
-// Collapsed state: Set of message IDs that are collapsed
-const collapsedNodes = ref<Set<string>>(new Set())
 
-// Auto-collapse threshold: collapse nodes when tree has more than this many messages
-const AUTO_COLLAPSE_THRESHOLD = 200
+/** Represents a branch in the conversation tree */
+interface Branch {
+  id: string
+  title: string
+  preview: string
+  messageCount: number
+  excludedCount: number // Number of messages excluded from context
+  leafMessageId: string
+  depth: number
+  isActive: boolean
+  hasExplicitTitle: boolean // true if user provided a branch title, false if auto-generated
+  children: Branch[]
+  colorIndex: number // Index into BRANCH_COLORS for this branch
+}
 
-// Whether to show tree controls
-const showControls = computed(() => props.messages.length > 50)
+// Track color index during tree building
+let colorCounter = 0
 
-// Count of total nodes
-const nodeCount = computed(() => props.messages.length)
+/**
+ * Build a tree of branches from the message structure
+ * A branch is created when a message has multiple children (branch point)
+ */
+const branchTree = computed((): Branch[] => {
+  if (props.rootMessages.length === 0) return []
 
-// Count of visible nodes (rough estimate based on collapsed state)
-const visibleNodeCount = computed(() => {
-  let count = 0
-  const countVisible = (msgId: string | null, depth: number = 0) => {
-    const children = msgId ? props.childrenMap.get(msgId) ?? [] : props.rootMessages
-    for (const child of children) {
-      count++
-      if (!collapsedNodes.value.has(child.id)) {
-        countVisible(child.id, depth + 1)
-      }
+  // Reset color counter for each rebuild
+  colorCounter = 0
+
+  const branches: Branch[] = []
+
+  // Process each root as the start of a branch
+  for (const root of props.rootMessages) {
+    const branch = buildBranch(root, 0)
+    if (branch) {
+      branches.push(branch)
     }
   }
-  countVisible(null)
-  return count
+
+  return branches
 })
 
-// Check if a node is collapsed
-function isCollapsed(messageId: string): boolean {
-  return collapsedNodes.value.has(messageId)
-}
+/**
+ * Recursively build a branch starting from a message
+ * Follows the "main" path (untitled messages) and shows titled branches as sub-branches.
+ *
+ * Key behavior:
+ * - If a message has one untitled child + titled children, follow the untitled one
+ *   as the main path and show titled ones as sub-branches
+ * - Only create a true "branch point" when multiple untitled children exist
+ */
+function buildBranch(startMessage: Message, depth: number): Branch {
+  let current = startMessage
+  let messageCount = 1
+  const branchTitle = startMessage.branchTitle
+  const titledBranchesAlongPath: Message[] = [] // Collect titled branches we pass
 
-// Toggle collapse state for a node
-function toggleCollapse(messageId: string) {
-  const newSet = new Set(collapsedNodes.value)
-  if (newSet.has(messageId)) {
-    newSet.delete(messageId)
-  } else {
-    newSet.add(messageId)
-  }
-  collapsedNodes.value = newSet
-}
+  // Follow the path until we find a true branch point or leaf
+  while (true) {
+    const children = props.childrenMap.get(current.id) ?? []
 
-// Expand a specific node
-function expandNode(messageId: string) {
-  const newSet = new Set(collapsedNodes.value)
-  newSet.delete(messageId)
-  collapsedNodes.value = newSet
-}
-
-// Collapse all nodes except those on the active path
-function collapseAll() {
-  const newCollapsed = new Set<string>()
-
-  // Collapse all nodes that have children
-  for (const msg of props.messages) {
-    const children = props.childrenMap.get(msg.id) ?? []
-    if (children.length > 0) {
-      newCollapsed.add(msg.id)
-    }
-  }
-
-  collapsedNodes.value = newCollapsed
-}
-
-// Expand only the path to the active message
-function expandToActivePath() {
-  const newCollapsed = new Set<string>()
-
-  // First collapse all nodes with children
-  for (const msg of props.messages) {
-    const children = props.childrenMap.get(msg.id) ?? []
-    if (children.length > 0) {
-      newCollapsed.add(msg.id)
-    }
-  }
-
-  // Then expand all nodes on the active path
-  for (const msgId of props.timelineIds) {
-    newCollapsed.delete(msgId)
-  }
-
-  collapsedNodes.value = newCollapsed
-}
-
-// Expand all nodes
-function expandAll() {
-  collapsedNodes.value = new Set()
-}
-
-// Auto-collapse when tree gets large
-watch(
-  () => props.messages.length,
-  (newLength, oldLength) => {
-    // If we just loaded a large tree, auto-collapse to active path
-    if (newLength > AUTO_COLLAPSE_THRESHOLD && oldLength === 0) {
-      expandToActivePath()
-    }
-  },
-  { immediate: true }
-)
-
-// Ensure active message path is always visible
-watch(
-  () => props.activeMessageId,
-  (newActiveId) => {
-    if (!newActiveId) return
-
-    // Expand all ancestors of the active message
-    let currentId: string | null = newActiveId
-    while (currentId) {
-      const msg = props.messageMap.get(currentId)
-      if (!msg) break
-
-      // Expand parent if it's collapsed
-      if (msg.parentId && collapsedNodes.value.has(msg.parentId)) {
-        expandNode(msg.parentId)
+    if (children.length === 0) {
+      // Leaf node - end of this branch
+      break
+    } else if (children.length === 1) {
+      const onlyChild = children[0]!
+      // If the single child has a branch title, treat it as a branch point
+      // so it appears separately in the tree
+      if (onlyChild.branchTitle) {
+        break
       }
+      // Single child without title - continue following
+      current = onlyChild
+      messageCount++
+    } else {
+      // Multiple children - check if we can continue on a "main" path
+      const untitledChildren = children.filter(c => !c.branchTitle)
+      const titledChildren = children.filter(c => c.branchTitle)
 
-      currentId = msg.parentId
+      if (untitledChildren.length === 1) {
+        // Exactly one untitled child = main path continues
+        // Collect titled children as branches to show later
+        titledBranchesAlongPath.push(...titledChildren)
+        current = untitledChildren[0]!
+        messageCount++
+      } else {
+        // Multiple untitled children = true branch point, stop here
+        break
+      }
     }
   }
-)
 
-// Provide collapse state to child nodes
-provide('isCollapsed', isCollapsed)
-provide('toggleCollapse', toggleCollapse)
+  // Get children branches
+  const childBranches: Branch[] = []
 
-function handleSelect(messageId: string) {
-  emit('select', messageId)
+  // First, add any titled branches we collected while following the main path
+  for (const titledChild of titledBranchesAlongPath) {
+    const childBranch = buildBranch(titledChild, depth + 1)
+    childBranches.push(childBranch)
+  }
+
+  // Then handle the final branch point children (if any)
+  const branchPointChildren = props.childrenMap.get(current.id) ?? []
+
+  // Show child branches if:
+  // 1. Multiple children (traditional branch point), OR
+  // 2. Single child with a branch title (explicitly named branch)
+  const shouldShowChildren = branchPointChildren.length > 1 ||
+    (branchPointChildren.length === 1 && branchPointChildren[0]?.branchTitle)
+
+  if (shouldShowChildren) {
+    for (const child of branchPointChildren) {
+      const childBranch = buildBranch(child, depth + 1)
+      childBranches.push(childBranch)
+    }
+  }
+
+  // Determine if this branch is active (contains the active message)
+  const isActive = isBranchActive(startMessage, current)
+
+  // Create preview from first message
+  const preview = getMessagePreview(startMessage)
+
+  // Title: use branch title if available, otherwise generate one
+  const title = branchTitle || getBranchTitle(startMessage, depth)
+
+  // Assign color index: -1 for main branch (uses accent), otherwise cycle through palette
+  const colorIndex = depth === 0 ? -1 : colorCounter++
+
+  return {
+    id: startMessage.id,
+    title,
+    preview,
+    messageCount: countBranchMessages(startMessage, current),
+    excludedCount: countExcludedMessages(startMessage, current),
+    leafMessageId: current.id,
+    depth,
+    isActive,
+    hasExplicitTitle: !!branchTitle,
+    children: childBranches,
+    colorIndex,
+  }
 }
+
+/**
+ * Count messages from start to end (following main path through untitled children)
+ */
+function countBranchMessages(start: Message, end: Message): number {
+  let count = 1
+  let current = start
+
+  while (current.id !== end.id) {
+    const children = props.childrenMap.get(current.id) ?? []
+    if (children.length === 1) {
+      current = children[0]!
+      count++
+    } else if (children.length > 1) {
+      // Multiple children - follow the untitled one if there's exactly one
+      const untitledChildren = children.filter(c => !c.branchTitle)
+      if (untitledChildren.length === 1) {
+        current = untitledChildren[0]!
+        count++
+      } else {
+        break
+      }
+    } else {
+      break
+    }
+  }
+
+  return count
+}
+
+/**
+ * Count excluded messages from start to end (following main path)
+ */
+function countExcludedMessages(start: Message, end: Message): number {
+  const excluded = excludedMessageIds.value
+  if (excluded.size === 0) return 0
+
+  let count = excluded.has(start.id) ? 1 : 0
+  let current = start
+
+  while (current.id !== end.id) {
+    const children = props.childrenMap.get(current.id) ?? []
+    if (children.length === 1) {
+      current = children[0]!
+      if (excluded.has(current.id)) count++
+    } else if (children.length > 1) {
+      const untitledChildren = children.filter(c => !c.branchTitle)
+      if (untitledChildren.length === 1) {
+        current = untitledChildren[0]!
+        if (excluded.has(current.id)) count++
+      } else {
+        break
+      }
+    } else {
+      break
+    }
+  }
+
+  return count
+}
+
+/**
+ * Check if a branch contains the active message (following main path)
+ */
+function isBranchActive(start: Message, end: Message): boolean {
+  let current: Message | undefined = start
+
+  while (current) {
+    if (props.timelineIds.has(current.id)) {
+      return true
+    }
+    if (current.id === end.id) break
+
+    const children: Message[] = props.childrenMap.get(current.id) ?? []
+    if (children.length === 1) {
+      current = children[0]!
+    } else if (children.length > 1) {
+      // Multiple children - follow the untitled one if there's exactly one
+      const untitledChildren = children.filter(c => !c.branchTitle)
+      current = untitledChildren.length === 1 ? untitledChildren[0]! : undefined
+    } else {
+      current = undefined
+    }
+  }
+
+  return false
+}
+
+/**
+ * Generate a default branch title based on position
+ */
+function getBranchTitle(message: Message, depth: number): string {
+  if (depth === 0) {
+    return 'Main conversation'
+  }
+  // Use role to create a label
+  const roleLabel = message.role === 'user' ? 'User' : message.role === 'assistant' ? 'Assistant' : 'System'
+  return `${roleLabel} branch`
+}
+
+/**
+ * Get a short preview of message content
+ */
+function getMessagePreview(message: Message): string {
+  const content = message.content.trim().replace(/\n/g, ' ')
+  const maxLength = 40
+  if (content.length <= maxLength) {
+    return content || `(${message.role})`
+  }
+  return content.substring(0, maxLength) + '…'
+}
+
+function handleSelectBranch(leafMessageId: string) {
+  emit('select', leafMessageId)
+}
+
+function handleDeleteBranch(branchId: string, depth: number) {
+  emit('delete-branch', branchId, depth)
+}
+
+function handleRenameBranch(branchId: string, newTitle: string) {
+  emit('rename-branch', branchId, newTitle)
+}
+
+/**
+ * Extract branch title to color mapping from the built tree.
+ * This allows other components (like MessageTimeline) to use consistent colors.
+ */
+const branchColorMap = computed((): Map<string, string> => {
+  const colorMap = new Map<string, string>()
+
+  function extractColors(branch: Branch) {
+    // Only map branches with explicit titles (user-named branches)
+    if (branch.hasExplicitTitle && branch.title) {
+      const color = branch.colorIndex < 0
+        ? 'accent'
+        : BRANCH_COLORS[branch.colorIndex % BRANCH_COLORS.length]!
+      colorMap.set(branch.title, color)
+    }
+    // Recurse into children
+    for (const child of branch.children) {
+      extractColors(child)
+    }
+  }
+
+  for (const branch of branchTree.value) {
+    extractColors(branch)
+  }
+
+  return colorMap
+})
+
+// Expose the color map for parent components to access
+defineExpose({
+  branchColorMap
+})
 </script>
 
 <template>
-  <div class="message-tree-container">
-    <!-- Tree Controls -->
-    <div
-      v-if="showControls"
-      class="tree-controls"
-      data-testid="tree-controls"
-    >
-      <div class="tree-stats">
-        <span class="text-xs text-gray-500">
-          {{ visibleNodeCount }}/{{ nodeCount }} visible
-        </span>
-      </div>
-      <div class="tree-actions">
-        <button
-          class="tree-action-btn"
-          title="Collapse all branches"
-          data-testid="collapse-all-btn"
-          @click="collapseAll"
-        >
-          <span>&#x25B6;</span>
-          <span>Collapse</span>
-        </button>
-        <button
-          class="tree-action-btn"
-          title="Expand to active path only"
-          data-testid="expand-to-path-btn"
-          @click="expandToActivePath"
-        >
-          <span>&#x25BC;</span>
-          <span>Active Path</span>
-        </button>
-        <button
-          class="tree-action-btn"
-          title="Expand all branches"
-          data-testid="expand-all-btn"
-          @click="expandAll"
-        >
-          <span>&#x25BC;</span>
-          <span>All</span>
-        </button>
-      </div>
-    </div>
-
+  <div class="conversation-tree-container">
     <!-- Tree Content -->
-    <div class="text-sm" data-testid="message-tree">
-      <MessageTreeNode
-        v-for="rootMessage in rootMessages"
-        :key="rootMessage.id"
-        :message="rootMessage"
-        :depth="0"
-        :children-map="childrenMap"
-        :active-message-id="activeMessageId"
-        :timeline-ids="timelineIds"
-        :collapsed-nodes="collapsedNodes"
-        @select="handleSelect"
-        @toggle-collapse="toggleCollapse"
-      />
+    <div class="tree-content" data-testid="message-tree">
+      <div v-if="branchTree.length === 0" class="empty-tree">
+        No messages yet
+      </div>
+
+      <template v-else>
+        <BranchNode
+          v-for="branch in branchTree"
+          :key="branch.id"
+          :branch="branch"
+          :depth="0"
+          :branch-colors="BRANCH_COLORS"
+          @select="handleSelectBranch"
+          @delete-branch="handleDeleteBranch"
+          @rename-branch="handleRenameBranch"
+        />
+      </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-.message-tree-container {
+.conversation-tree-container {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-.tree-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.tree-content {
+  flex: 1;
+  overflow-y: auto;
   padding: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
-  flex-shrink: 0;
-}
-
-.tree-stats {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.tree-actions {
-  display: flex;
+  flex-direction: column;
   gap: 0.25rem;
 }
 
-.tree-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tree-action-btn:hover {
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.empty-tree {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 </style>

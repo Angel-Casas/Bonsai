@@ -2,32 +2,295 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import HeroGraphic from './heroes/HeroGraphic.vue'
+import { Motion } from 'motion-v'
 import TopNavBar from '@/components/TopNavBar.vue'
 import { useThemeStore } from '@/stores/themeStore'
+import { useSmoothScroll } from '@/composables/useSmoothScroll'
+
+// Parallax layer images
+import stampDayImg from '@/assets/bonsai-stamp-day.png'
+import stampNightImg from '@/assets/bonsai-stamp-night.png'
+
+// Letter images for BONSAI title
+import BDay from '@/assets/B-day.png'
+import ODay from '@/assets/O-day.png'
+import NDay from '@/assets/N-day.png'
+import SDay from '@/assets/S-day.png'
+import ADay from '@/assets/A-day.png'
+import IDay from '@/assets/I-day.png'
+import BNight from '@/assets/B-night.png'
+import ONight from '@/assets/O-night.png'
+import NNight from '@/assets/N-night.png'
+import SNight from '@/assets/S-night.png'
+import ANight from '@/assets/A-night.png'
+import INight from '@/assets/I-night.png'
+import bg1 from '@/assets/parallax/bg-1.png'
+import bg2 from '@/assets/parallax/bg-2.png'
+import bg3 from '@/assets/parallax/bg-3.png'
+import bg4 from '@/assets/parallax/bg-4.png'
+import bg5 from '@/assets/parallax/bg-5.png'
+import bg6 from '@/assets/parallax/bg-6.png'
+
+import bg1Night from '@/assets/parallax/bg-1-night.png'
+import bg2Night from '@/assets/parallax/bg-2-night.png'
+import bg3Night from '@/assets/parallax/bg-3-night.png'
+import bg4Night from '@/assets/parallax/bg-4-night.png'
+import bg5Night from '@/assets/parallax/bg-5-night.png'
+import bg6Night from '@/assets/parallax/bg-6-night.png'
 
 const router = useRouter()
 const { t, tm } = useI18n()
 const themeStore = useThemeStore()
+
+// =============================================================================
+// PARALLAX BACKGROUND
+// =============================================================================
+const dayImages = [bg1, bg2, bg3, bg4, bg5, bg6]
+const nightImages = [bg1Night, bg2Night, bg3Night, bg4Night, bg5Night, bg6Night]
+const parallaxImages = computed(() => themeStore.isDayMode ? dayImages : nightImages)
+const stampImage = computed(() => themeStore.isDayMode ? stampDayImg : stampNightImg)
+
+const titleLetters = computed(() => {
+  const day = [BDay, ODay, NDay, SDay, ADay, IDay]
+  const night = [BNight, ONight, NNight, SNight, ANight, INight]
+  const srcs = themeStore.isDayMode ? day : night
+  return srcs.map((src, i) => ({ src, alt: 'BONSAI'[i] }))
+})
+
+const parallaxProgress = ref(0)
+let parallaxRafId: number | null = null
+
+const parallaxLayers = [
+  { baseScale: 1.0, speed: 0.40 },  // bg-1 — furthest (slight overscale to mask edge bleed)
+  { baseScale: 1.0, speed: 0.80 },  // bg-2
+  { baseScale: 1.0, speed: 1.30 },  // bg-3
+  { baseScale: 1.0, speed: 1.70 },  // bg-4
+  { baseScale: 1.0, speed: 2.40 },  // bg-5
+  { baseScale: 1.07, speed: 0 },  // bg-6 — closest
+] as const
+
+function getParallaxScale(index: number): number {
+  const { baseScale, speed } = parallaxLayers[index]!
+  return baseScale + parallaxProgress.value * speed
+}
+
+function updateParallaxProgress() {
+  if (parallaxRafId !== null) return
+  parallaxRafId = requestAnimationFrame(() => {
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight
+    parallaxProgress.value = maxScroll > 0 ? Math.min(window.scrollY / maxScroll, 1) : 0
+    updateHeroProgress()
+    parallaxRafId = null
+  })
+}
+
+// =============================================================================
+// HERO SCROLL-DRIVEN ANIMATION
+// =============================================================================
+const heroProgress = ref(0)
+const HERO_SCROLL_RANGE = 2.5
+// Capture initial viewport height to avoid jitter from mobile browser chrome hiding/showing
+let stableViewportHeight = 0
+
+// Mobile auto-scroll: one touch gesture auto-scrolls through the hero section
+let heroAutoScrollRafId: number | null = null
+let heroAutoDirection = 0 // 1 = forward, -1 = backward, 0 = stopped
+let heroTouchStartY = 0
+let heroTouchActive = false
+const HERO_AUTO_SCROLL_SPEED = 32 // pixels per frame (~480px/s at 60fps)
+const HERO_AUTO_STOP_PROGRESS = 0.55 // stop when all visible animations are done
+
+function getHeroEnd(): number {
+  const vh = stableViewportHeight || window.innerHeight
+  return vh * HERO_SCROLL_RANGE
+}
+
+function updateHeroProgress() {
+  const vh = stableViewportHeight || window.innerHeight
+  const heroEnd = vh * HERO_SCROLL_RANGE
+  heroProgress.value = heroEnd > 0 ? Math.min(window.scrollY / heroEnd, 1) : 0
+}
+
+function heroAutoScrollLoop() {
+  if (heroAutoDirection === 0) {
+    heroAutoScrollRafId = null
+    return
+  }
+  const heroEnd = getHeroEnd()
+  const stopScroll = heroEnd * HERO_AUTO_STOP_PROGRESS
+  const newScroll = window.scrollY + heroAutoDirection * HERO_AUTO_SCROLL_SPEED
+
+  if (heroAutoDirection > 0 && newScroll >= stopScroll) {
+    window.scrollTo(0, stopScroll)
+    heroAutoDirection = 0
+    heroAutoScrollRafId = null
+    return
+  }
+  if (heroAutoDirection < 0 && newScroll <= 0) {
+    window.scrollTo(0, 0)
+    heroAutoDirection = 0
+    heroAutoScrollRafId = null
+    return
+  }
+
+  window.scrollTo(0, newScroll)
+  heroAutoScrollRafId = requestAnimationFrame(heroAutoScrollLoop)
+}
+
+function startHeroAutoScroll(direction: number) {
+  heroAutoDirection = direction
+  if (heroAutoScrollRafId === null) {
+    heroAutoScrollRafId = requestAnimationFrame(heroAutoScrollLoop)
+  }
+}
+
+function onHeroTouchStart(e: TouchEvent) {
+  if (!e.touches[0]) return
+  heroTouchStartY = e.touches[0].clientY
+  heroTouchActive = true
+  // Pause auto-scroll while touching
+  heroAutoDirection = 0
+}
+
+function onHeroTouchMove(e: TouchEvent) {
+  if (!heroTouchActive || !e.touches[0]) return
+  const stopScroll = getHeroEnd() * HERO_AUTO_STOP_PROGRESS
+  // Only intercept within hero auto-scroll range; let native scroll handle the rest
+  if (window.scrollY >= stopScroll) return
+
+  const touchY = e.touches[0].clientY
+  const delta = heroTouchStartY - touchY // positive = scrolling down
+
+  if (Math.abs(delta) > 8) {
+    e.preventDefault()
+    const direction = delta > 0 ? 1 : -1
+    startHeroAutoScroll(direction)
+    heroTouchStartY = touchY
+  }
+}
+
+function onHeroTouchEnd() {
+  heroTouchActive = false
+  // Auto-scroll continues in current direction (momentum)
+}
+
+const descriptionOpacity = computed(() => {
+  if (heroProgress.value < 0.1) return 0
+  if (heroProgress.value > 0.35) return 1
+  return (heroProgress.value - 0.1) / 0.25
+})
+
+const descriptionTranslateY = computed(() => {
+  if (heroProgress.value < 0.1) return 40
+  if (heroProgress.value > 0.35) return 0
+  return 40 * (1 - (heroProgress.value - 0.1) / 0.25)
+})
+
+// Tile-flip reveal for frame image
+const TILE_COLS = 6
+const TILE_ROWS = 6
+const TILE_COUNT = TILE_COLS * TILE_ROWS
+// Compute each tile's normalized threshold (0-1) — center-outward ripple
+function getTileThreshold(index: number): number {
+  const col = index % TILE_COLS
+  const row = Math.floor(index / TILE_COLS)
+  const cx = (TILE_COLS - 1) / 2
+  const cy = (TILE_ROWS - 1) / 2
+  const dist = Math.sqrt((col - cx) ** 2 + (row - cy) ** 2)
+  const maxDist = Math.sqrt(cx ** 2 + cy ** 2)
+  return dist / maxDist
+}
+
+// Map heroProgress (0.05–0.30) to tile flip states
+function isTileFlipped(index: number): boolean {
+  const start = 0.05
+  const end = 0.30
+  const progress = (heroProgress.value - start) / (end - start)
+  return progress > getTileThreshold(index)
+}
+
+// Scroll-driven staggered letter reveal (heroProgress 0.12–0.38)
+function getLetterStyle(index: number): Record<string, string> {
+  const LETTER_START = 0.12
+  const LETTER_END = 0.38
+  const LETTER_COUNT = 6
+  // Each letter gets an equal slice of the range, staggered
+  const sliceDuration = (LETTER_END - LETTER_START) / (LETTER_COUNT + 1)
+  const letterStart = LETTER_START + index * sliceDuration
+  const letterEnd = letterStart + sliceDuration * 2 // overlap for smoothness
+  const p = heroProgress.value
+  const t = Math.min(Math.max((p - letterStart) / (letterEnd - letterStart), 0), 1)
+  // Ease-out cubic
+  const eased = 1 - Math.pow(1 - t, 3)
+  const opacity = eased
+  const translateY = (1 - eased) * 30
+  const scale = 0.7 + eased * 0.3
+  return {
+    opacity: String(opacity),
+    transform: `translateY(${translateY}px) scale(${scale})`,
+  }
+}
+
+
+const trustTagsOpacity = computed(() => {
+  if (heroProgress.value < 0.35) return 0
+  if (heroProgress.value > 0.5) return 1
+  return (heroProgress.value - 0.35) / 0.15
+})
+
+const heroSectionDone = computed(() => heroProgress.value >= 1)
+
+// Scroll indicator drifts from center-right to bottom-right on mobile as user scrolls
+const isMobile = ref(false)
+const scrollIndicatorStyle = computed(() => {
+  if (!isMobile.value) return {}
+  const p = Math.min(Math.max(heroProgress.value / 0.3, 0), 1)
+  const eased = p * p // ease-in for smooth start
+  // Interpolate from 50svh to 82svh
+  const topPercent = 50 + eased * 32
+  return {
+    top: `${topPercent}svh`,
+    transform: `translateY(-${50 - eased * 50}%)`,
+  }
+})
 
 const activeFaqIndex = ref<number | null>(null)
 const vizStep = ref(0)
 const hasScrolled = ref(false)
 const isAnimating = ref(false)
 
-// Scroll hijack state for "How it works" section
+// Scroll hijack state machine
+const ScrollState = { FREE: 0, LOCKING: 1, LOCKED: 2, RELEASING: 3 } as const
+type ScrollStateType = (typeof ScrollState)[keyof typeof ScrollState]
 const branchingSectionRef = ref<HTMLElement | null>(null)
-const isHijacked = ref(false)
-const justReleased = ref(false) // Prevents re-hijacking immediately after release
-const hijackCooldown = ref(false) // 600ms pause after hijacking to let user see current step
-let accumulatedDelta = 0
-const SCROLL_THRESHOLD = 120
-let wheelCooldown = false
-let observer: IntersectionObserver | null = null
+let scrollState: ScrollStateType = ScrollState.FREE
+const sectionCentered = ref(false)
 
-// Chat scroll boundary buffer state
+// Step transition timing
+let accumulatedDelta = 0
+const STEP_THRESHOLD = 100
+const STEP_COOLDOWN_MS = 400
+let lastStepChangeTime = 0
+
+// Release cooldown
+const RELEASE_COOLDOWN_MS = 500
+let releaseTimer: ReturnType<typeof setTimeout> | null = null
+
+// Chat scroll boundary buffer
 let chatBoundaryDelta = 0
-const CHAT_BOUNDARY_THRESHOLD = 200 // Amount of scroll needed after hitting boundary
+const CHAT_BOUNDARY_THRESHOLD = 200
+
+// IntersectionObservers
+let centerObserver: IntersectionObserver | null = null
+let escapeObserver: IntersectionObserver | null = null
+
+const LOCK_OFFSET = 40
+
+// Lerp scroll engine (no internal listeners — we feed it from handleWheel)
+const { feedDelta, animateTo, syncPosition, start: startScroll, stop: stopScroll } = useSmoothScroll({
+  lerp: 0.09,
+  maxDelta: 120,
+})
 
 // Branch highlighting state
 const hoveredBranch = ref<string | null>(null)
@@ -230,191 +493,212 @@ function handleScroll() {
 // =============================================================================
 // SCROLL HIJACK FOR "HOW IT WORKS" SECTION
 // =============================================================================
-const LOCK_OFFSET = 40 // Section top will be this many pixels from viewport top
 
-function snapToSection(element: HTMLElement) {
+function snapToSection(element: HTMLElement): Promise<void> {
   const rect = element.getBoundingClientRect()
-  const targetY = window.scrollY + rect.top - LOCK_OFFSET
-  window.scrollTo({ top: targetY, behavior: 'smooth' })
+  const target = window.scrollY + rect.top - LOCK_OFFSET
+  // Use the lerp engine (not native behavior:'smooth') to avoid fighting
+  animateTo(target)
+  return new Promise(resolve => {
+    const check = () => {
+      if (Math.abs(window.scrollY - target) < 2) {
+        resolve()
+      } else {
+        requestAnimationFrame(check)
+      }
+    }
+    requestAnimationFrame(check)
+  })
 }
 
-function smoothScrollToSection(element: HTMLElement) {
-  const rect = element.getBoundingClientRect()
-  const targetY = window.scrollY + rect.top
-  window.scrollTo({ top: targetY, behavior: 'smooth' })
-}
-
-function hijackScroll() {
-  if (isHijacked.value) return
-  isHijacked.value = true
+function lockScroll() {
+  scrollState = ScrollState.LOCKED
   document.body.style.overflow = 'hidden'
-}
-
-function releaseScroll() {
-  if (!isHijacked.value) return
-  isHijacked.value = false
-  justReleased.value = true
-  document.body.style.overflow = ''
   accumulatedDelta = 0
 }
 
+function releaseScroll(direction: 'up' | 'down') {
+  if (scrollState !== ScrollState.LOCKED) return
+
+  scrollState = ScrollState.RELEASING
+  document.body.style.overflow = ''
+  accumulatedDelta = 0
+
+  // Sync lerp engine then scroll to adjacent section
+  syncPosition()
+  const section = branchingSectionRef.value
+  if (section) {
+    const sibling = direction === 'down'
+      ? section.nextElementSibling as HTMLElement
+      : section.previousElementSibling as HTMLElement
+    if (sibling) {
+      const rect = sibling.getBoundingClientRect()
+      animateTo(window.scrollY + rect.top)
+    }
+  }
+
+  // Timed cooldown: return to FREE after delay (no position-based dead zone)
+  if (releaseTimer) clearTimeout(releaseTimer)
+  releaseTimer = setTimeout(() => {
+    scrollState = ScrollState.FREE
+    releaseTimer = null
+  }, RELEASE_COOLDOWN_MS)
+}
+
 function handleWheel(event: WheelEvent) {
-  // Check if scrolling inside .chat-messages container
+  // ---- Guard: settings overlay scroll ----
   const target = event.target as HTMLElement
+  if (target.closest('.settings-overlay')) return
+
+  // ---- Guard: chat sub-container scroll ----
   const chatContainer = target.closest('.chat-messages') as HTMLElement | null
 
   if (chatContainer) {
     const scrollingDown = event.deltaY > 0
     const scrollingUp = event.deltaY < 0
-
-    // Check if at the bottom (with small tolerance for rounding)
     const atBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 2
-    // Check if at the top
     const atTop = chatContainer.scrollTop <= 2
 
-    // If not at a boundary, reset buffer and allow normal chat scrolling
     if ((scrollingDown && !atBottom) || (scrollingUp && !atTop)) {
       chatBoundaryDelta = 0
-      return
+      return // Let chat scroll naturally
     }
 
-    // At boundary - accumulate delta before passing through
     chatBoundaryDelta += Math.abs(event.deltaY)
-
-    // If haven't accumulated enough, block the scroll
     if (chatBoundaryDelta < CHAT_BOUNDARY_THRESHOLD) {
       event.preventDefault()
       return
     }
-
-    // Threshold exceeded - reset and fall through to page scroll logic
     chatBoundaryDelta = 0
+    // Fall through to page scroll logic
   }
 
-  const section = branchingSectionRef.value
-  if (!section) return
+  // ---- Ignore ctrl/meta (zoom) ----
+  if (event.ctrlKey || event.metaKey) return
 
-  const rect = section.getBoundingClientRect()
-  const scrollingDown = event.deltaY > 0
-  const scrollingUp = event.deltaY < 0
+  const state = scrollState
 
-  // Detection zone: section top is between -100px and 300px from viewport top
-  const inDetectionZone = rect.top > -100 && rect.top < 300
-
-  // If just released, wait until section is out of detection zone before allowing re-hijack
-  if (justReleased.value) {
-    if (!inDetectionZone) {
-      justReleased.value = false
-    }
-    return // Don't process anything while in "just released" state
-  }
-
-  // If in detection zone and not hijacked, snap and hijack
-  if (inDetectionZone && !isHijacked.value) {
+  // ---- RELEASING: consume silently (timed cooldown, no dead zone) ----
+  if (state === ScrollState.RELEASING) {
     event.preventDefault()
-    snapToSection(section)
-    hijackScroll()
-    hijackCooldown.value = true // Pause to let user see current step
-    accumulatedDelta = 0
-    // After cooldown, allow scroll processing
-    setTimeout(() => {
-      hijackCooldown.value = false
-      accumulatedDelta = 0 // Reset again to ignore scroll during cooldown
-    }, 600)
     return
   }
 
-  // If not hijacked, do nothing
-  if (!isHijacked.value) return
+  // ---- LOCKING: consume silently while snap animation runs ----
+  if (state === ScrollState.LOCKING) {
+    event.preventDefault()
+    return
+  }
 
-  // We're hijacked - prevent all default scrolling
+  // ---- LOCKED: drive step changes ----
+  if (state === ScrollState.LOCKED) {
+    event.preventDefault()
+
+    const now = Date.now()
+    if (now - lastStepChangeTime < STEP_COOLDOWN_MS) return
+    if (isAnimating.value) return
+
+    const scrollingDown = event.deltaY > 0
+    const scrollingUp = event.deltaY < 0
+
+    // Reset on direction change
+    if ((scrollingDown && accumulatedDelta < 0) || (scrollingUp && accumulatedDelta > 0)) {
+      accumulatedDelta = 0
+    }
+
+    accumulatedDelta += event.deltaY
+
+    if (scrollingDown && accumulatedDelta >= STEP_THRESHOLD) {
+      accumulatedDelta = 0
+      if (vizStep.value < 2) {
+        lastStepChangeTime = now
+        goToStep(vizStep.value + 1)
+      } else {
+        releaseScroll('down')
+      }
+    } else if (scrollingUp && accumulatedDelta <= -STEP_THRESHOLD) {
+      accumulatedDelta = 0
+      if (vizStep.value > 0) {
+        lastStepChangeTime = now
+        goToStep(vizStep.value - 1)
+      } else {
+        releaseScroll('up')
+      }
+    }
+    return
+  }
+
+  // ---- FREE: check for hijack trigger, otherwise smooth scroll ----
+  if (sectionCentered.value && branchingSectionRef.value) {
+    event.preventDefault()
+    scrollState = ScrollState.LOCKING
+
+    snapToSection(branchingSectionRef.value).then(() => {
+      // Only lock if we're still in LOCKING (wasn't cancelled by resize etc.)
+      if (scrollState === ScrollState.LOCKING) {
+        lockScroll()
+      }
+    })
+    return
+  }
+
+  // Normal smooth scroll via lerp engine
   event.preventDefault()
 
-  // Don't process during cooldowns or animation
-  if (hijackCooldown.value || wheelCooldown || isAnimating.value) return
+  let rawDelta = event.deltaY
+  if (event.deltaMode === 1) rawDelta *= 40
+  if (event.deltaMode === 2) rawDelta *= 800
 
-  // Reset delta if direction changes
-  if ((scrollingDown && accumulatedDelta < 0) || (scrollingUp && accumulatedDelta > 0)) {
-    accumulatedDelta = 0
-  }
-
-  // Accumulate scroll delta
-  accumulatedDelta += event.deltaY
-
-  // Scrolling DOWN
-  if (scrollingDown) {
-    if (vizStep.value < 2) {
-      // More steps - advance when threshold reached
-      if (accumulatedDelta >= SCROLL_THRESHOLD) {
-        wheelCooldown = true
-        goToStep(vizStep.value + 1)
-        accumulatedDelta = 0
-        setTimeout(() => { wheelCooldown = false }, 800)
-      }
-    } else {
-      // At last step - release and smooth scroll to next section
-      if (accumulatedDelta >= SCROLL_THRESHOLD) {
-        releaseScroll()
-        const nextSection = section.nextElementSibling as HTMLElement
-        if (nextSection) {
-          smoothScrollToSection(nextSection)
-        }
-      }
-    }
-  }
-  // Scrolling UP
-  else if (scrollingUp) {
-    if (vizStep.value > 0) {
-      // More steps - go back when threshold reached
-      if (accumulatedDelta <= -SCROLL_THRESHOLD) {
-        wheelCooldown = true
-        goToStep(vizStep.value - 1)
-        accumulatedDelta = 0
-        setTimeout(() => { wheelCooldown = false }, 800)
-      }
-    } else {
-      // At first step - release and smooth scroll to previous section
-      if (accumulatedDelta <= -SCROLL_THRESHOLD) {
-        releaseScroll()
-        const prevSection = section.previousElementSibling as HTMLElement
-        if (prevSection) {
-          smoothScrollToSection(prevSection)
-        }
-      }
-    }
-  }
+  feedDelta(rawDelta)
 }
 
-function setupIntersectionObserver() {
+function setupObservers() {
   const section = branchingSectionRef.value
   if (!section) return
 
-  observer = new IntersectionObserver(
+  // Center observer: fires when section enters the middle 40% of viewport
+  centerObserver = new IntersectionObserver(
     (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting && isHijacked.value) {
-          // Section left viewport while hijacked - release
-          releaseScroll()
-        }
-      })
+      for (const entry of entries) {
+        sectionCentered.value = entry.isIntersecting
+      }
     },
-    { threshold: 0.3 }
+    {
+      rootMargin: '-30% 0px -30% 0px',
+      threshold: 0,
+    }
   )
+  centerObserver.observe(section)
 
-  observer.observe(section)
+  // Escape observer: emergency release if section fully leaves viewport while locked
+  escapeObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting && scrollState === ScrollState.LOCKED) {
+          scrollState = ScrollState.FREE
+          document.body.style.overflow = ''
+          accumulatedDelta = 0
+          syncPosition()
+        }
+      }
+    },
+    { threshold: 0.1 }
+  )
+  escapeObserver.observe(section)
 }
 
 function handleResize() {
-  // Release scroll hijack if window resized to mobile
-  if (window.innerWidth < 768 && isHijacked.value) {
-    releaseScroll()
-  }
-
-  // Add/remove wheel listener based on screen size for performance
+  isMobile.value = window.innerWidth < 768
   if (window.innerWidth < 768) {
+    // Release on mobile
+    if (scrollState === ScrollState.LOCKED || scrollState === ScrollState.LOCKING) {
+      document.body.style.overflow = ''
+      scrollState = ScrollState.FREE
+      syncPosition()
+    }
     window.removeEventListener('wheel', handleWheel)
   } else {
-    window.removeEventListener('wheel', handleWheel) // Remove first to avoid duplicates
+    window.removeEventListener('wheel', handleWheel)
     window.addEventListener('wheel', handleWheel, { passive: false })
   }
 }
@@ -424,15 +708,6 @@ function handleResize() {
 // =============================================================================
 function enterApp() {
   router.push({ name: 'home' })
-}
-
-function scrollToVisualization() {
-  const element = document.getElementById('branching-viz')
-  if (element) {
-    const rect = element.getBoundingClientRect()
-    const targetY = window.scrollY + rect.top - LOCK_OFFSET
-    window.scrollTo({ top: targetY, behavior: 'smooth' })
-  }
 }
 
 // =============================================================================
@@ -535,7 +810,7 @@ function goToStep(step: number) {
   // Reset animation flag after transition completes
   setTimeout(() => {
     isAnimating.value = false
-  }, 800)
+  }, 500)
 }
 
 // =============================================================================
@@ -625,33 +900,76 @@ const activeBranch = computed(() => hoveredBranch.value || highlightedBranch.val
 
 
 // =============================================================================
+// MOTION ANIMATION PRESETS
+// =============================================================================
+function fadeUp(delay = 0) {
+  return {
+    initial: { opacity: 0, y: 30 },
+    inView: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, delay, ease: 'easeOut' },
+  }
+}
+
+function fadeIn(delay = 0) {
+  return {
+    initial: { opacity: 0 },
+    inView: { opacity: 1 },
+    transition: { duration: 0.5, delay, ease: 'easeOut' },
+  }
+}
+
+// =============================================================================
 // LIFECYCLE
 // =============================================================================
 onMounted(() => {
+  stableViewportHeight = window.innerHeight
+  isMobile.value = window.innerWidth < 768
+  if (isMobile.value) {
+    document.addEventListener('touchstart', onHeroTouchStart, { passive: true })
+    document.addEventListener('touchmove', onHeroTouchMove, { passive: false })
+    document.addEventListener('touchend', onHeroTouchEnd, { passive: true })
+  }
+  startScroll()
+
   window.addEventListener('scroll', handleScroll)
+  window.addEventListener('scroll', updateParallaxProgress, { passive: true })
   window.addEventListener('resize', handleResize)
 
-  // Only add wheel listener on larger screens for performance
   if (window.innerWidth >= 768) {
     window.addEventListener('wheel', handleWheel, { passive: false })
   }
 
-  // Setup intersection observer after next tick to ensure ref is populated
-  setTimeout(() => {
-    setupIntersectionObserver()
-  }, 100)
+  // Setup observers after DOM settles
+  setTimeout(setupObservers, 100)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('scroll', updateParallaxProgress)
   window.removeEventListener('wheel', handleWheel)
   window.removeEventListener('resize', handleResize)
   stopRandomHighlight()
-  releaseScroll()
-  if (observer) {
-    observer.disconnect()
-    observer = null
+  stopScroll()
+
+  if (heroAutoScrollRafId !== null) cancelAnimationFrame(heroAutoScrollRafId)
+  document.removeEventListener('touchstart', onHeroTouchStart)
+  document.removeEventListener('touchmove', onHeroTouchMove)
+  document.removeEventListener('touchend', onHeroTouchEnd)
+  if (parallaxRafId !== null) cancelAnimationFrame(parallaxRafId)
+
+  // Clean up scroll lock
+  if (scrollState === ScrollState.LOCKED || scrollState === ScrollState.LOCKING) {
+    document.body.style.overflow = ''
   }
+  scrollState = ScrollState.FREE
+
+  if (releaseTimer) {
+    clearTimeout(releaseTimer)
+    releaseTimer = null
+  }
+
+  centerObserver?.disconnect()
+  escapeObserver?.disconnect()
 })
 
 // Watch for step changes to start/stop random highlighting
@@ -670,40 +988,87 @@ watch(vizStep, (newStep) => {
     <!-- Top Navigation Bar -->
     <TopNavBar />
 
-    <!-- Grid background -->
-    <div class="grid-background">
-      <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(231, 210, 124, 0.08)" stroke-width="0.5"/>
-          </pattern>
-          <pattern id="largeGrid" width="100" height="100" patternUnits="userSpaceOnUse">
-            <rect width="100" height="100" fill="url(#smallGrid)"/>
-            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(231, 210, 124, 0.15)" stroke-width="1"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#largeGrid)" />
-      </svg>
+    <!-- Parallax Background -->
+    <div class="parallax-viewport">
+      <div class="parallax-frame">
+        <div
+          v-for="(_, i) in 6"
+          :key="i"
+          class="parallax-layer"
+          :style="{
+            zIndex: i,
+            transform: `scale(${getParallaxScale(i)})`,
+          }"
+        >
+          <img :src="parallaxImages[i]" :alt="`Layer ${i + 1}`" draggable="false" />
+        </div>
+      </div>
     </div>
 
     <!-- ================================================================== -->
-    <!-- HERO SECTION -->
+    <!-- HERO SECTION (Scroll-Driven Cinematic Reveal) -->
     <!-- ================================================================== -->
     <section class="hero-section">
-      <div class="hero-background">
-        <HeroGraphic />
-      </div>
+      <!-- Fixed layer: title + description + trust tags (fades out when done) -->
+      <div class="hero-fixed-layer" :class="{ 'hero-fixed-layer--done': heroSectionDone }">
+        <!-- Left: Stamp Logo + Horizontal Title -->
+        <div class="hero-title-container">
+          <!-- Stamp image with tile-reveal -->
+          <div class="hero-stamp-wrapper">
+            <img
+              class="hero-stamp-img"
+              :src="stampImage"
+              alt="Bonsai"
+              draggable="false"
+            />
+            <!-- Tile grid overlay — covers stamp, tiles flip away to reveal it -->
+            <div class="tile-grid-overlay">
+              <div
+                v-for="idx in TILE_COUNT"
+                :key="idx - 1"
+                class="reveal-tile"
+                :class="{ flipped: isTileFlipped(idx - 1) }"
+              />
+            </div>
+          </div>
+          <!-- Horizontal title below the stamp — letter images with staggered scroll reveal -->
+          <h1 class="hero-title-letters" data-testid="hero-headline">
+            <img
+              v-for="(letter, i) in titleLetters"
+              :key="i"
+              :src="letter.src"
+              :alt="letter.alt"
+              class="title-letter-img"
+              :style="getLetterStyle(i)"
+              draggable="false"
+            />
+          </h1>
+        </div>
 
-      <div class="hero-content">
-        <h1 class="hero-title" data-testid="hero-headline">
-          <span class="title-line">Bons</span><span class="title-accent">ai</span>
-        </h1>
+        <!-- Right top: Subtitle -->
+        <div
+          class="hero-subtitle-reveal"
+          :style="{
+            opacity: descriptionOpacity,
+            transform: `translateY(${descriptionTranslateY}px)`,
+          }"
+        >
+          <p class="hero-description-line">{{ t('hero.subtitle') }}</p>
+        </div>
 
-        <p class="hero-subtitle">
-          {{ t('hero.subtitle') }}
-        </p>
+        <!-- Right center: Tagline -->
+        <div
+          class="hero-tagline-reveal"
+          :style="{
+            opacity: descriptionOpacity,
+            transform: `translateY(${descriptionTranslateY}px)`,
+          }"
+        >
+          <p class="hero-description-tagline">{{ t('footer.tagline') }}</p>
+        </div>
 
-        <div class="trust-tags">
+        <!-- Trust Tags -->
+        <div class="trust-tags" :style="{ opacity: trustTagsOpacity }">
           <div class="trust-tag">
             <span class="tag-dot"></span>
             {{ t('hero.trustTags.localFirst') }}
@@ -719,7 +1084,8 @@ watch(vizStep, (newStep) => {
         </div>
       </div>
 
-      <div class="hero-ctas">
+      <!-- CTAs at bottom of viewport -->
+      <div class="hero-ctas" :class="{ 'hero-ctas--done': heroSectionDone }" :style="scrollIndicatorStyle">
         <button class="cta-primary" data-testid="enter-app-btn" @click="enterApp">
           {{ t('hero.cta.enterApp') }}
           <svg class="cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -727,20 +1093,15 @@ watch(vizStep, (newStep) => {
           </svg>
         </button>
 
-        <!-- Scroll indicator (center) -->
-        <Transition name="fade">
-          <div v-if="!hasScrolled" class="scroll-indicator">
-            <div class="scroll-arrow">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M5 12l7 7 7-7" />
-              </svg>
-            </div>
+        <!-- Scroll indicator with text -->
+        <div class="scroll-indicator" :class="{ 'scroll-indicator--hidden': heroSectionDone }">
+          <span class="scroll-indicator-text" :class="{ 'scroll-indicator-text--hidden': hasScrolled }">SCROLL DOWN</span>
+          <div class="scroll-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12l7 7 7-7" />
+            </svg>
           </div>
-        </Transition>
-
-        <button class="cta-secondary" data-testid="watch-demo-btn" @click="scrollToVisualization">
-          {{ t('hero.cta.howItWorks') }}
-        </button>
+        </div>
       </div>
     </section>
 
@@ -750,9 +1111,9 @@ watch(vizStep, (newStep) => {
     <section id="branching-viz" ref="branchingSectionRef" class="branching-section">
       <div class="section-container">
         <div class="section-header">
-          <span class="section-tag">{{ t('howItWorks.sectionTag') }}</span>
-          <h2 class="section-title">{{ t('howItWorks.title') }}</h2>
-          <p class="section-subtitle">{{ t('howItWorks.subtitle') }}</p>
+          <Motion tag="span" class="section-tag" v-bind="fadeIn(0)" :inViewOptions="{ amount: 0.1 }">{{ t('howItWorks.sectionTag') }}</Motion>
+          <Motion tag="h2" class="section-title" v-bind="fadeUp(0.05)" :inViewOptions="{ amount: 0.1 }">{{ t('howItWorks.title') }}</Motion>
+          <Motion tag="p" class="section-subtitle" v-bind="fadeUp(0.15)" :inViewOptions="{ amount: 0.1 }">{{ t('howItWorks.subtitle') }}</Motion>
         </div>
 
         <div class="branching-layout">
@@ -786,7 +1147,7 @@ watch(vizStep, (newStep) => {
               <defs>
                 <!-- Grid pattern -->
                 <pattern id="diagramGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(231, 210, 124, 0.06)" stroke-width="1"/>
+                  <path class="grid-line" d="M 40 0 L 0 0 0 40" fill="none" stroke-width="1"/>
                 </pattern>
                 <!-- Glow filter -->
                 <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -889,7 +1250,7 @@ watch(vizStep, (newStep) => {
               <!-- Main horizontal line (always visible) -->
               <path
                 d="M 50 250 L 900 250"
-                stroke="#E7D27C"
+                stroke="currentColor"
                 stroke-width="3"
                 fill="none"
                 stroke-linecap="round"
@@ -942,28 +1303,28 @@ watch(vizStep, (newStep) => {
               </g>
 
               <!-- Start node -->
-              <circle class="start-node" cx="50" cy="250" r="5" fill="#E7D27C" filter="url(#glow)" />
+              <circle class="start-node" cx="50" cy="250" r="5" fill="currentColor" filter="url(#glow)" />
 
               <!-- Branch point 1 (x=200) - always visible -->
               <g class="branch-node">
-                <circle cx="200" cy="250" r="10" fill="transparent" stroke="#E7D27C" stroke-width="2" />
-                <circle cx="200" cy="250" r="5" fill="#E7D27C" />
+                <circle cx="200" cy="250" r="10" fill="transparent" stroke="currentColor" stroke-width="2" />
+                <circle cx="200" cy="250" r="5" fill="currentColor" />
               </g>
 
               <!-- Branch point 2 (x=400) - visible after step 1 -->
               <g v-if="vizStep >= 1" class="branch-node">
-                <circle cx="400" cy="250" r="10" fill="transparent" stroke="#E7D27C" stroke-width="2" />
-                <circle cx="400" cy="250" r="5" fill="#E7D27C" />
+                <circle cx="400" cy="250" r="10" fill="transparent" stroke="currentColor" stroke-width="2" />
+                <circle cx="400" cy="250" r="5" fill="currentColor" />
               </g>
 
               <!-- Branch point 3 (x=600) - visible after step 1 -->
               <g v-if="vizStep >= 1" class="branch-node">
-                <circle cx="600" cy="250" r="10" fill="transparent" stroke="#E7D27C" stroke-width="2" />
-                <circle cx="600" cy="250" r="5" fill="#E7D27C" />
+                <circle cx="600" cy="250" r="10" fill="transparent" stroke="currentColor" stroke-width="2" />
+                <circle cx="600" cy="250" r="5" fill="currentColor" />
               </g>
 
               <!-- End node on main line -->
-              <circle class="end-node" cx="900" cy="250" r="5" fill="#E7D27C" filter="url(#glow)" />
+              <circle class="end-node" cx="900" cy="250" r="5" fill="currentColor" filter="url(#glow)" />
 
               <!-- Interactive button - moves position based on step -->
               <g
@@ -999,7 +1360,7 @@ watch(vizStep, (newStep) => {
               <circle v-if="vizStep >= 1" r="4" fill="#FDBA74" filter="url(#glow)" class="traveling-dot">
                 <animateMotion dur="3.5s" repeatCount="indefinite" begin="1s" path="M 600 250 C 680 250, 680 380, 760 380 L 850 380" />
               </circle>
-              <circle r="4" fill="#E7D27C" filter="url(#glow)" class="traveling-dot traveling-dot-main">
+              <circle r="4" fill="currentColor" filter="url(#glow)" class="traveling-dot traveling-dot-main">
                 <animateMotion dur="5s" repeatCount="indefinite" begin="0.2s" path="M 50 250 L 900 250" />
               </circle>
 
@@ -1250,13 +1611,13 @@ watch(vizStep, (newStep) => {
     <section class="features-section">
       <div class="section-container">
         <div class="section-header">
-          <span class="section-tag">{{ t('features.sectionTag') }}</span>
-          <h2 class="section-title">{{ t('features.title') }}</h2>
-          <p class="section-subtitle">{{ t('features.subtitle') }}</p>
+          <Motion tag="span" class="section-tag" v-bind="fadeIn(0)" :inViewOptions="{ amount: 0.1 }">{{ t('features.sectionTag') }}</Motion>
+          <Motion tag="h2" class="section-title" v-bind="fadeUp(0.05)" :inViewOptions="{ amount: 0.1 }">{{ t('features.title') }}</Motion>
+          <Motion tag="p" class="section-subtitle" v-bind="fadeUp(0.15)" :inViewOptions="{ amount: 0.1 }">{{ t('features.subtitle') }}</Motion>
         </div>
 
         <div class="features-grid">
-          <div v-for="(feature, i) in features" :key="feature.title" class="feature-card">
+          <Motion v-for="(feature, i) in features" :key="feature.title" tag="div" class="feature-card" v-bind="fadeUp(0.1 + i * 0.08)" :inViewOptions="{ amount: 0.2 }">
             <div class="feature-number">{{ String(i + 1).padStart(2, '0') }}</div>
             <div class="feature-icon">
               <!-- Branch -->
@@ -1297,7 +1658,7 @@ watch(vizStep, (newStep) => {
             </div>
             <h3 class="feature-title">{{ feature.title }}</h3>
             <p class="feature-description">{{ feature.description }}</p>
-          </div>
+          </Motion>
         </div>
       </div>
     </section>
@@ -1309,16 +1670,19 @@ watch(vizStep, (newStep) => {
     <section class="faq-section">
       <div class="section-container">
         <div class="section-header">
-          <span class="section-tag">{{ t('faq.sectionTag') }}</span>
-          <h2 class="section-title">{{ t('faq.title') }}</h2>
+          <Motion tag="span" class="section-tag" v-bind="fadeIn(0)" :inViewOptions="{ amount: 0.1 }">{{ t('faq.sectionTag') }}</Motion>
+          <Motion tag="h2" class="section-title" v-bind="fadeUp(0.05)" :inViewOptions="{ amount: 0.1 }">{{ t('faq.title') }}</Motion>
         </div>
 
         <div class="faq-list">
-          <div
+          <Motion
             v-for="(item, i) in faqItems"
             :key="i"
+            tag="div"
             class="faq-item"
             :class="{ open: activeFaqIndex === i }"
+            v-bind="fadeUp(0.1 + i * 0.08)"
+            :inViewOptions="{ amount: 0.3 }"
           >
             <button class="faq-question" @click="activeFaqIndex = activeFaqIndex === i ? null : i">
               <span class="faq-num">{{ String(i + 1).padStart(2, '0') }}</span>
@@ -1330,7 +1694,7 @@ watch(vizStep, (newStep) => {
             <div v-show="activeFaqIndex === i" class="faq-answer">
               <p>{{ item.answer }}</p>
             </div>
-          </div>
+          </Motion>
         </div>
       </div>
     </section>
@@ -1340,24 +1704,26 @@ watch(vizStep, (newStep) => {
     <!-- ================================================================== -->
     <footer class="footer-section">
       <div class="section-container">
-        <button class="cta-primary footer-cta-spacing" @click="enterApp">
-          {{ t('footer.cta') }}
-          <svg class="cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </button>
+        <Motion tag="div" class="footer-cta-wrapper" v-bind="fadeUp(0)" :inViewOptions="{ amount: 0.1 }">
+          <button class="cta-primary footer-cta-spacing" @click="enterApp">
+            {{ t('footer.cta') }}
+            <svg class="cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </Motion>
 
-        <p class="footer-tagline">{{ t('footer.tagline') }}</p>
+        <Motion tag="p" class="footer-tagline" v-bind="fadeIn(0.2)" :inViewOptions="{ amount: 0.1 }">{{ t('footer.tagline') }}</Motion>
 
-        <div class="footer-links">
+        <Motion tag="div" class="footer-links" v-bind="fadeIn(0.3)" :inViewOptions="{ amount: 0.1 }">
           <span class="footer-link">{{ t('footer.links.dataStored') }}</span>
           <span class="footer-sep">|</span>
           <a href="#" class="footer-link">{{ t('footer.links.github') }}</a>
           <span class="footer-sep">|</span>
           <a href="#" class="footer-link">{{ t('footer.links.docs') }}</a>
-        </div>
+        </Motion>
 
-        <div class="footer-version">v1.0.0</div>
+        <Motion tag="div" class="footer-version" v-bind="fadeIn(0.4)" :inViewOptions="{ amount: 0.1 }">v1.0.0</Motion>
       </div>
     </footer>
   </div>
@@ -1370,13 +1736,14 @@ watch(vizStep, (newStep) => {
 /* CSS CUSTOM PROPERTIES (VARIABLES) */
 /* ============================================================================= */
 .landing-page {
-  /* Night mode colors */
-  --bg-primary: #0f172a;
-  --bg-secondary: rgba(15, 23, 42, 0.85);
-  --bg-tertiary: rgba(15, 23, 42, 0.95);
+  /* Night mode colors — pure black + gold */
+  --bg-primary: #000000;
+  --bg-secondary: rgba(10, 10, 10, 0.85);
+  --bg-tertiary: rgba(10, 10, 10, 0.95);
   --text-primary: #e2e8f0;
   --text-secondary: #929ca9;
   --text-muted: rgba(226, 232, 240, 0.6);
+  --text-description: #CDD4DE;
   --accent: #E7D27C;
   --accent-rgb: 231, 210, 124;
   --border-color: rgba(231, 210, 124, 0.4);
@@ -1387,21 +1754,18 @@ watch(vizStep, (newStep) => {
   --branch-pink: #F9A8D4;
   --branch-orange: #FDBA74;
 
-  /* Shadow gradient colors */
-  --shadow-gold: #F5D485;
-
   /* Typography */
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* Border radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 28px;
-  --radius-pill: 50px;
-  --radius-full: 50%;
+  /* Border radius — sharp edges */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-pill: 0;
+  --radius-full: 50%; /* keep for circular dots only */
 
   /* Blur values */
   --blur-sm: blur(8px);
@@ -1420,20 +1784,21 @@ watch(vizStep, (newStep) => {
   --shadow-accent-lg: 0 8px 25px rgba(var(--accent-rgb), 0.4);
 }
 
-/* Day mode color overrides */
+/* Day mode color overrides — Chinese blue-and-white porcelain */
 .landing-page.day-mode {
-  --bg-primary: #FFF8F0;
-  --bg-secondary: rgba(255, 248, 240, 0.95);
-  --bg-tertiary: rgba(255, 248, 240, 0.98);
-  --text-primary: #2D2A26;
-  --text-secondary: #5C5650;
-  --text-muted: rgba(45, 42, 38, 0.6);
-  --accent: #C4956A;
-  --accent-rgb: 196, 149, 106;
-  --accent-dark: #B8845A;
-  --accent-darker: #A8744A;
-  --border-color: #C4956A;
-  --border-subtle: #D4C4B4;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: rgba(255, 255, 255, 0.95);
+  --bg-tertiary: rgba(255, 255, 255, 0.98);
+  --text-primary: var(--accent);
+  --text-secondary: #578cff;
+  --text-muted: rgba(var(--accent-rgb), 0.6);
+  --accent: #0227f6;
+  --accent-rgb: 2, 39, 246;
+  --accent-mid: #3860e8;
+  --accent-dark: #011DC4;
+  --accent-darker: #01159A;
+  --border-color: var(--accent);
+  --border-subtle: #a3bbff;
   --shadow-accent: 0 4px 15px rgba(var(--accent-rgb), 0.3);
   --shadow-accent-lg: 0 8px 25px rgba(var(--accent-rgb), 0.4);
 }
@@ -1442,14 +1807,54 @@ watch(vizStep, (newStep) => {
 /* BASE STYLES */
 /* ============================================================================= */
 .landing-page {
-  min-height: 100vh;
+  min-height: 100svh;
   padding-top: 60px; /* Account for fixed navbar */
   color: var(--text-primary);
   font-family: var(--font-sans);
   overflow-x: hidden;
   position: relative;
   background: var(--bg-primary);
-  transition: background var(--transition-slow), color var(--transition-slow);
+  transition: color var(--transition-slow);
+}
+
+/* ============================================================================= */
+/* PARALLAX BACKGROUND */
+/* ============================================================================= */
+.parallax-viewport {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.parallax-frame {
+  position: absolute;
+  /* Anchor to stable svh center so mobile browser chrome changes don't cause jumps */
+  top: 50svh;
+  left: 50vw;
+  transform: translate(-50%, -50%);
+  /* Keep square: use the smaller of 50vw / 50svh so the cutout layer is never cropped */
+  width: min(50vw, 50svh);
+  height: min(50vw, 50svh);
+  overflow: hidden;
+}
+
+.parallax-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  will-change: transform;
+  transition: transform 0.05s linear;
+}
+
+.parallax-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
 }
 
 /* ============================================================================= */
@@ -1462,38 +1867,14 @@ watch(vizStep, (newStep) => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  z-index: 1000;
+  z-index: var(--z-navbar);
 }
 
 /* ============================================================================= */
 /* THEME TOGGLE */
 /* ============================================================================= */
 .theme-toggle {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--accent);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
-  transition: all var(--transition-normal);
-}
-
-.theme-toggle:hover {
-  background: rgba(var(--accent-rgb), 0.2);
-  border-color: var(--accent);
-  transform: scale(1.08);
-}
-
-.theme-toggle svg {
-  width: 20px;
-  height: 20px;
-  transition: transform 0.4s ease;
+  border-color: var(--border-color);
 }
 
 /* ============================================================================= */
@@ -1517,46 +1898,25 @@ watch(vizStep, (newStep) => {
   }
 }
 
-/* Icon spin during transition */
-.theme-transitioning .theme-toggle svg {
-  animation: iconSpin 0.5s ease;
-}
-
-@keyframes iconSpin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
 /* ============================================================================= */
 /* DAY MODE - Warm Pastel Theme */
 /* ============================================================================= */
 /* Note: Color variables are automatically switched via .landing-page.day-mode above */
 
 .day-mode .theme-toggle {
-  background: var(--bg-secondary);
   border-color: var(--accent);
-  color: var(--accent);
-}
-
-.day-mode .theme-toggle:hover {
-  background: var(--accent);
-  color: var(--bg-primary);
 }
 
 /* Language selector */
 .day-mode :deep(.language-trigger) {
-  background: var(--bg-secondary);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: transparent;
+  border-color: rgba(56, 96, 232, 0.2);
+  color: var(--accent-mid);
 }
 
 .day-mode :deep(.language-trigger:hover) {
-  background: rgba(var(--accent-rgb), 0.15);
-  border-color: var(--accent);
+  background: rgba(56, 96, 232, 0.06);
+  border-color: var(--accent-mid);
 }
 
 .day-mode :deep(.loading-overlay) {
@@ -1566,7 +1926,7 @@ watch(vizStep, (newStep) => {
 .day-mode :deep(.language-dropdown) {
   background: var(--bg-tertiary);
   border-color: var(--accent);
-  box-shadow: 0 10px 40px rgba(139, 90, 43, 0.15);
+  box-shadow: 0 10px 40px rgba(var(--accent-rgb), 0.15);
 }
 
 .day-mode :deep(.locale-option) {
@@ -1587,11 +1947,6 @@ watch(vizStep, (newStep) => {
 
 .day-mode :deep(.check-icon) {
   color: var(--accent);
-}
-
-/* Grid background */
-.day-mode .grid-background path {
-  stroke: rgba(var(--accent-rgb), 0.12) !important;
 }
 
 /* Hero section */
@@ -1620,144 +1975,176 @@ watch(vizStep, (newStep) => {
 
 /* CTA Buttons */
 .day-mode .cta-primary {
-  background: linear-gradient(135deg, #C4956A 0%, #B8845A 100%);
-  color: #FFF8F0;
-  border-color: #C4956A;
-  box-shadow: 0 4px 15px rgba(196, 149, 106, 0.3);
+  color: #FFFFFF;
+  /* Blue glow top-right, black center */
+  --grd-pos-x: 100%;
+  --grd-pos-y: 0%;
+  --grd-spread-x: 120.24%;
+  --grd-spread-y: 103.18%;
+  --grd-c1: var(--accent-mid);
+  --grd-c2: var(--accent);
+  --grd-c3: var(--accent-dark);
+  --grd-c4: #010e60;
+  --grd-c5: #000000;
+  --grd-s1: 0%;
+  --grd-s2: 8.8%;
+  --grd-s3: 21.44%;
+  --grd-s4: 71.34%;
+  --grd-s5: 85.76%;
+  box-shadow: 0 4px 15px rgba(var(--accent-rgb), 0.2);
 }
 
 .day-mode .cta-primary:hover {
-  background: linear-gradient(135deg, #B8845A 0%, #A8744A 100%);
-  box-shadow: 0 8px 25px rgba(196, 149, 106, 0.4);
+  /* Vivid blue on hover */
+  --grd-c1: var(--accent-mid);
+  --grd-c2: var(--accent);
+  --grd-c3: var(--accent-dark);
+  --grd-c4: #010e60;
+  --grd-c5: #000520;
+  box-shadow: 0 8px 25px rgba(var(--accent-rgb), 0.35);
 }
 
 .day-mode .cta-primary::before {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .day-mode .cta-primary:hover::before {
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 .day-mode .cta-secondary {
-  color: #C4956A;
-  background: rgba(196, 149, 106, 0.1);
-  border-color: #C4956A;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: var(--accent);
 }
 
 .day-mode .cta-secondary:hover {
-  background: rgba(196, 149, 106, 0.2);
+  background: rgba(var(--accent-rgb), 0.2);
 }
 
 .day-mode .scroll-arrow {
-  color: #C4956A;
+  color: var(--accent);
+}
+
+.day-mode .scroll-indicator-text {
+  color: var(--accent);
+}
+
+/* Day mode hero overrides */
+.day-mode .hero-description-line {
+  color: var(--accent);
+}
+
+.day-mode .hero-description-tagline {
+  color: var(--accent);
 }
 
 /* Section styles */
 .day-mode .section-tag {
-  color: #C4956A;
-  border-color: rgba(196, 149, 106, 0.4);
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .day-mode .section-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .section-subtitle {
-  color: #5C5650;
+  color: var(--text-secondary);
 }
 
 /* Branching section */
 .day-mode .branching-section {
-  background: linear-gradient(180deg, rgba(255, 248, 240, 0.98) 0%, rgba(255, 248, 240, 1) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 1) 100%);
 }
 
 .day-mode .step-card {
   background: rgba(255, 255, 255, 0.9);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .step-number {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .step-header,
 .day-mode .step-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .step-description {
-  color: #5C5650;
+  color: var(--text-secondary);
 }
 
 .day-mode .step-of {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .viz-sidebar {
   background: rgba(255, 255, 255, 0.95);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .sidebar-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .sidebar-description {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .step-indicator {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 /* Branch navigation */
 .day-mode .branch-nav-item {
   background: rgba(255, 255, 255, 0.95);
-  border-color: #D4C4B4;
-  color: #5C5650;
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
 }
 
 .day-mode .branch-nav-item:hover {
-  border-color: #C4956A;
+  border-color: var(--accent);
 }
 
 .day-mode .branch-nav-item.sub-branch::before,
 .day-mode .branch-nav-item.sub-branch::after {
-  background: #2D2A26;
+  background: var(--accent);
 }
 
 .day-mode .branch-nav-item.active {
-  border-color: #C4956A;
-  color: #C4956A;
-  background: rgba(196, 149, 106, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .day-mode .branch-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .branch-subtitle {
-  color: #5C5650;
+  color: var(--text-secondary);
 }
 
 /* Chat messages */
 .day-mode .chat-container {
   background: rgba(255, 255, 255, 0.9);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .chat-message {
   background: rgba(255, 255, 255, 0.95);
-  border-color: #E8D4C4;
+  border-color: #C0D4E8;
 }
 
 .day-mode .chat-message.user {
-  background: rgba(196, 149, 106, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 .day-mode .chat-message.from-main {
-  background: rgba(232, 212, 196, 0.3);
+  background: rgba(200, 215, 235, 0.3);
 }
 
 .day-mode .chat-message.out-of-context {
@@ -1765,41 +2152,41 @@ watch(vizStep, (newStep) => {
 }
 
 .day-mode .message-role {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .message-content {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .chat-message.out-of-context .message-content {
-  color: #8C8680;
+  color: var(--text-secondary);
 }
 
 .day-mode .message-content p {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .chat-message.out-of-context .message-content p {
-  color: #8C8680;
+  color: var(--text-secondary);
 }
 
 /* Branch point indicator */
 .day-mode .branch-point-line {
-  background: linear-gradient(90deg, transparent, rgba(196, 149, 106, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.5), transparent);
 }
 
 .day-mode .branch-point-label {
-  color: #C4956A;
-  background: rgba(196, 149, 106, 0.1);
-  border-color: rgba(196, 149, 106, 0.3);
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: rgba(var(--accent-rgb), 0.3);
 }
 
 /* Context toggle */
 .day-mode .context-toggle {
   border: none;
   background: transparent;
-  color: #8C8680;
+  color: var(--text-secondary);
 }
 
 .day-mode .context-toggle.active {
@@ -1809,54 +2196,54 @@ watch(vizStep, (newStep) => {
 }
 
 .day-mode .context-toggle-all {
-  color: #8C8680;
+  color: var(--text-secondary);
 }
 
 .day-mode .context-toggle-all:hover {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 /* Flip section / Branching diagram */
 .day-mode .branching-diagram {
   background: rgba(255, 255, 255, 0.9);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.1),
-    inset 0 0 0 1px rgba(196, 149, 106, 0.1);
+    inset 0 0 0 1px rgba(var(--accent-rgb), 0.1);
 }
 
 .day-mode .chat-demo {
   background: rgba(255, 255, 255, 0.98);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .chat-sidebar {
   background: white;
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .chat-sidebar-header {
-  color: #5C5650;
-  border-color: #D4C4B4;
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
 }
 
 .day-mode .flip-back-btn {
-  background: rgba(196, 149, 106, 0.1);
-  border-color: #C4956A;
-  color: #C4956A;
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .day-mode .flip-back-btn:hover {
-  background: rgba(196, 149, 106, 0.2);
-  border-color: #C4956A;
+  background: rgba(var(--accent-rgb), 0.2);
+  border-color: var(--accent);
 }
 
 .day-mode .branch-nav-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .branch-nav-subtitle {
-  color: #5C5650;
+  color: var(--text-secondary);
 }
 
 .day-mode .chat-main {
@@ -1864,13 +2251,13 @@ watch(vizStep, (newStep) => {
 }
 
 .day-mode .chat-header {
-  background: rgba(248, 244, 240, 0.9);
-  border-color: #D4C4B4;
-  color: #2D2A26;
+  background: rgba(245, 248, 255, 0.9);
+  border-color: var(--border-subtle);
+  color: var(--accent);
 }
 
 .day-mode .chat-header-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .chat-messages {
@@ -1878,219 +2265,199 @@ watch(vizStep, (newStep) => {
 }
 
 .day-mode .chat-messages::-webkit-scrollbar-track {
-  background: rgba(196, 149, 106, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 .day-mode .chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(196, 149, 106, 0.4);
+  background: rgba(var(--accent-rgb), 0.4);
 }
 
 .day-mode .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(196, 149, 106, 0.6);
+  background: rgba(var(--accent-rgb), 0.6);
 }
 
 /* Viz indicators */
 .day-mode .viz-indicator {
   background: rgba(255, 255, 255, 0.95);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .viz-dot {
-  background: #D4C4B4;
+  background: var(--border-subtle);
 }
 
 .day-mode .viz-dot.active {
-  background: #C4956A;
+  background: var(--accent);
 }
 
 /* Feature cards */
 .day-mode .feature-card {
   background: rgba(255, 255, 255, 0.5);
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .feature-card:hover {
-  border-color: #C4956A;
+  border-color: var(--accent);
   background: rgba(255, 255, 255, 1);
 }
 
 .day-mode .feature-number {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .feature-icon {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .feature-title {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 .day-mode .feature-description {
-  color: #5C5650;
+  color: var(--text-secondary);
 }
 
 /* FAQ section */
 .day-mode .faq-item {
-  border-color: #D4C4B4;
+  border-color: var(--border-subtle);
 }
 
 .day-mode .faq-question {
-  color: #2D2A26;
+  color: var(--accent);
   background: rgba(255, 255, 255, 0.8);
 }
 
 .day-mode .faq-question:hover {
   background: rgba(255, 255, 255, 1);
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .faq-num {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .faq-chevron {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .faq-icon {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .faq-answer {
-  color: #2D2A26;
+  color: var(--accent);
   background: rgba(255, 255, 255, 0.95);
 }
 
 .day-mode .faq-answer p {
-  color: #2D2A26;
+  color: var(--accent);
 }
 
 /* Footer */
 .day-mode .footer {
-  background: rgba(232, 212, 196, 0.3);
-  border-color: #D4C4B4;
+  background: rgba(200, 215, 235, 0.3);
+  border-color: var(--border-subtle);
 }
 
 .day-mode .footer-text {
-  color: #5C5650;
+  color: var(--text-secondary);
 }
 
 .day-mode .footer-link {
-  color: #C4956A;
+  color: var(--accent);
 }
 
 .day-mode .footer-section {
-  border-color: #D4C4B4;
-}
-
-/* Hero graphic */
-.day-mode :deep(.unified-svg) line,
-.day-mode :deep(.unified-svg) circle:not(.center-dot) {
-  stroke: #C4956A !important;
-}
-
-.day-mode :deep(.unified-svg) .center-dot,
-.day-mode :deep(.center-dot) {
-  fill: #C4956A !important;
+  border-color: var(--border-subtle);
 }
 
 /* Mobile tabs */
 .day-mode .mobile-chat-tabs {
-  background: rgba(248, 244, 240, 0.9);
-  border-color: #D4C4B4;
+  background: rgba(245, 248, 255, 0.9);
+  border-color: var(--border-subtle);
 }
 
 .day-mode .mobile-tab {
-  color: #2D2A26;
-  border-color: #D4C4B4;
+  color: var(--accent);
+  border-color: var(--border-subtle);
   background: rgba(255, 255, 255, 0.9);
 }
 
 .day-mode .mobile-tab.active {
-  color: #C4956A;
-  border-color: #C4956A;
-  background: rgba(196, 149, 106, 0.1);
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 /* Step dots */
 .day-mode .step-dot {
-  background: rgba(196, 149, 106, 0.2);
-  border-color: rgba(196, 149, 106, 0.3);
+  background: rgba(var(--accent-rgb), 0.2);
+  border-color: rgba(var(--accent-rgb), 0.3);
 }
 
 .day-mode .step-dot.active {
-  background: #C4956A;
-  border-color: #C4956A;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Continue button */
 .day-mode .continue-btn {
   background: rgba(255, 255, 255, 0.98);
-  border-color: #C4956A;
-  color: #C4956A;
+  border-color: var(--accent);
+  color: var(--accent);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .day-mode .continue-btn:hover {
-  background: rgba(196, 149, 106, 0.1);
-  border-color: #C4956A;
-  box-shadow: 0 0 20px rgba(196, 149, 106, 0.4);
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.4);
 }
 
 /* Branch labels */
 .day-mode .branch-label-main {
-  background: rgba(196, 149, 106, 0.1);
-  border: 1px solid rgba(196, 149, 106, 0.3);
-  color: #C4956A;
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  color: var(--accent);
 }
 
 /* Main branch path in diagram SVG */
 .day-mode .main-path {
-  stroke: #C4956A !important;
+  stroke: var(--accent) !important;
 }
 
 /* Start and end nodes on main branch */
 .day-mode .start-node {
-  fill: #C4956A !important;
+  fill: var(--accent) !important;
 }
 
 .day-mode .end-node {
-  fill: #C4956A !important;
+  fill: var(--accent) !important;
 }
 
 /* Traveling dot on main branch */
 .day-mode .traveling-dot-main {
-  fill: #C4956A !important;
+  fill: var(--accent) !important;
 }
 
 /* Label dot for main branch */
 .day-mode .label-dot.main {
-  background: #C4956A;
+  background: var(--accent);
 }
 
-/* Branch nodes - override inline SVG stroke colors */
-.day-mode .branch-node circle[stroke="#E7D27C"] {
-  stroke: #C4956A !important;
+/* Branch nodes - override inline SVG colors */
+.day-mode .branch-node circle {
+  stroke: var(--accent);
+  fill: var(--accent);
 }
 
-.day-mode .branch-node circle[fill="#E7D27C"] {
-  fill: #C4956A !important;
+.day-mode .branch-node circle[fill="transparent"] {
+  fill: transparent;
 }
 
 /* Branch button styling */
 .day-mode .branch-button {
-  color: #C4956A;
-}
-
-.grid-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
+  color: var(--accent);
 }
 
 .section-container {
@@ -2114,7 +2481,7 @@ watch(vizStep, (newStep) => {
   letter-spacing: 0.2em;
   color: var(--accent);
   padding: 0.4rem 0.8rem;
-  border: 2px solid rgb(231, 210, 124);
+  border: 2px solid var(--accent);
   margin-bottom: 1rem;
 }
 
@@ -2126,114 +2493,193 @@ watch(vizStep, (newStep) => {
 }
 
 .section-subtitle {
-  color: #cdd4de;
+  color: var(--text-description);
   font-size: 1.125rem;
   font-weight: 300;
 }
 
 /* ============================================================================= */
-/* HERO SECTION */
+/* HERO SECTION — Scroll-Driven Cinematic Reveal */
 /* ============================================================================= */
 .hero-section {
-  min-height: calc(100vh - 60px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 1rem;
-  padding-top: 0;
+  height: 300svh;
   position: relative;
+  z-index: 1;
+  overflow: visible;
+}
+
+/* Fixed layer: title + description + trust tags */
+.hero-fixed-layer {
+  position: fixed;
+  inset: 0;
+  top: 60px;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
   overflow: hidden;
 }
 
-@media (min-width: 768px) {
-  .hero-section {
-    padding: 2rem;
-    padding-top: 1rem;
-  }
+.hero-fixed-layer--done {
+  opacity: 0;
+  visibility: hidden;
 }
 
-.hero-background {
+/* --- Stamp Logo + Horizontal Title --- */
+.hero-title-container {
   position: absolute;
-  inset: 0;
+  top: 48%;
+  left: 4rem;
+  transform: translateY(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  z-index: 0;
+  z-index: 2;
+  overflow: visible;
 }
 
-.hero-background :deep(.hero-container) {
-  min-height: 100%;
+.hero-stamp-wrapper {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.hero-stamp-img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-}
-
-.hero-background :deep(.unified-svg) {
-  max-width: none;
-  width: 90vmin;
-  height: 90vmin;
-  max-height: 800px;
-  max-width: 800px;
-}
-
-@media (min-width: 768px) {
-  .hero-background :deep(.unified-svg) {
-    width: 85vmin;
-    height: 85vmin;
-    max-height: 900px;
-    max-width: 900px;
-  }
-}
-
-.hero-content {
-  text-align: center;
-  position: relative;
-  z-index: 1;
+  object-fit: contain;
   pointer-events: none;
-  padding: 2.5rem 2rem;
-  border-radius: 1rem;
+  user-select: none;
 }
 
-/* Only buttons should capture pointer events, text passes through */
-.hero-content button {
-  pointer-events: auto;
+/* Tile grid overlay — sits on top of stamp, same size/position */
+.tile-grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  z-index: 1;
+  perspective: 800px;
+  pointer-events: none;
 }
 
-.hero-title {
-  font-size: clamp(3rem, 10vw, 5rem);
-  font-weight: boldA;
-  margin-bottom: 1rem;
-  letter-spacing: -0.02em;
-  color: #ffffff;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+.reveal-tile {
+  background: var(--bg-primary);
+  transform-origin: center center;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease 0.2s;
+  backface-visibility: hidden;
+  opacity: 1;
+  margin: -0.5px;
 }
 
-.title-accent {
+.reveal-tile.flipped {
+  transform: rotateY(90deg);
+  opacity: 0;
+}
+
+.hero-title-letters {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.title-letter-img {
+  height: 3.2rem;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+  will-change: opacity, transform;
+}
+
+
+/* --- Subtitle Reveal (right side, near top) --- */
+.hero-subtitle-reveal {
+  position: absolute;
+  top: 2rem;
+  right: 6rem;
+  z-index: 2;
+  text-align: right;
+  will-change: opacity, transform;
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  max-width: 50vw;
+}
+
+/* --- Tagline Reveal (right side, centered) --- */
+.hero-tagline-reveal {
+  position: absolute;
+  top: 50%;
+  right: 6rem;
+  transform: translateY(-50%);
+  z-index: 2;
+  text-align: right;
+  will-change: opacity, transform;
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  max-width: 50vw;
+}
+
+.hero-description-line {
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.hero-description-tagline {
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
+  font-weight: 300;
   color: var(--accent);
-  font-weight: 500;
-  text-shadow: 0 0 30px rgba(231, 210, 124, 0.3);
+  margin-top: 1.5rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
 }
 
-.hero-subtitle {
-  font-size: 1.25rem;
-  color: white;
-  margin-bottom: 0;
-  font-weight: bold;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+/* --- Trust Tags (positioned below description) --- */
+.hero-section .trust-tags {
+  position: absolute;
+  bottom: 8rem;
+  right: 6rem;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  z-index: 2;
+  will-change: opacity;
+  transition: opacity 0.6s ease-out;
+  margin-top: 0;
 }
 
+/* --- CTAs at bottom of viewport --- */
 .hero-ctas {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   align-items: center;
   justify-content: center;
-  position: absolute;
-  bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
+  z-index: 3;
   pointer-events: auto;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.hero-ctas--done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* On small screens: arrow goes last */
@@ -2247,18 +2693,7 @@ watch(vizStep, (newStep) => {
 
 @media (min-width: 640px) {
   .hero-ctas {
-    flex-direction: row;
-    gap: 2.5rem;
     bottom: 3rem;
-  }
-
-  /* On medium+ screens: arrow in center, secondary on right */
-  .hero-ctas .scroll-indicator {
-    order: 2;
-  }
-
-  .hero-ctas .cta-secondary {
-    order: 3;
   }
 }
 
@@ -2268,55 +2703,250 @@ watch(vizStep, (newStep) => {
   }
 }
 
+/* Responsive hero */
+@media (max-width: 1024px) {
+  .hero-title-container {
+    left: 2rem;
+  }
+
+  .hero-stamp-wrapper {
+    width: 160px;
+    height: 160px;
+  }
+
+  .title-letter-img {
+    height: 2.6rem;
+  }
+
+  .hero-subtitle-reveal,
+  .hero-tagline-reveal {
+    right: 3rem;
+  }
+
+  .hero-section .trust-tags {
+    right: 3rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-section {
+    height: 250svh;
+  }
+
+  /* Title container: centered near top with stamp + letters side by side */
+  .hero-title-container {
+    left: 0;
+    right: 0;
+    top: 0.5rem;
+    transform: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .hero-stamp-wrapper {
+    width: 120px;
+    height: 120px;
+  }
+
+  .hero-title-letters {
+    margin-top: 0;
+  }
+
+  .title-letter-img {
+    height: 2.8rem;
+  }
+
+  /* Trust tags below the parallax */
+  .hero-section .trust-tags {
+    position: absolute;
+    top: 72svh;
+    bottom: auto;
+    right: 1rem;
+    left: 1rem;
+    justify-content: center;
+  }
+
+  /* Subtitle ("Branch your conversation") below the parallax */
+  .hero-subtitle-reveal {
+    top: 78svh;
+    bottom: auto;
+    right: 1rem;
+    left: 1rem;
+    text-align: center;
+    max-width: none;
+  }
+
+  /* Tagline below subtitle */
+  .hero-tagline-reveal {
+    top: 84svh;
+    bottom: auto;
+    right: 1rem;
+    left: 1rem;
+    text-align: center;
+    max-width: none;
+  }
+
+  .hero-description-line {
+    font-size: 1.3rem;
+  }
+
+  .hero-description-tagline {
+    font-size: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .hero-ctas {
+    /* Right edge — vertical position driven by scrollIndicatorStyle */
+    left: auto;
+    bottom: auto;
+    right: 0.5rem;
+    gap: 0;
+  }
+
+  .hero-ctas .cta-primary {
+    display: none;
+  }
+
+  .hero-ctas .scroll-indicator {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .hero-ctas .scroll-indicator-text {
+    writing-mode: vertical-rl;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+  }
+
+  .hero-ctas .scroll-arrow {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Scale down parallax frame for small screens but keep it square */
+  .parallax-frame {
+    width: min(70vw, 70svh);
+    height: min(70vw, 70svh);
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-stamp-wrapper {
+    width: 90px;
+    height: 90px;
+  }
+
+  .title-letter-img {
+    height: 2rem;
+  }
+
+  .hero-section .trust-tags {
+    top: 68svh;
+  }
+
+  .parallax-frame {
+    width: min(82vw, 80svh);
+    height: min(82vw, 80svh);
+  }
+}
+
 .cta-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  padding: 0.875rem 2rem;
+  padding: 1rem 2.25rem;
   min-width: 200px;
   white-space: nowrap;
   font-family: var(--font-sans);
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #0f172a;
-  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.95) 0%, rgba(var(--accent-rgb), 0.8) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--radius-pill);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 19px;
+  color: #FFFFFF;
+  border-radius: 11px;
   cursor: pointer;
-  transition: all var(--transition-normal);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
-  box-shadow:
-    0 4px 15px rgba(var(--accent-rgb), 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
   position: relative;
+
+  /* Default: dark gold/amber */
+  --grd-pos-x: 11.14%;
+  --grd-pos-y: 140%;
+  --grd-spread-x: 150%;
+  --grd-spread-y: 180.06%;
+  --grd-c1: #000000;
+  --grd-c2: #1a0e00;
+  --grd-c3: #4a2e0a;
+  --grd-c4: #6b4a1a;
+  --grd-c5: #8b6914;
+  --grd-s1: 37.35%;
+  --grd-s2: 61.36%;
+  --grd-s3: 78.42%;
+  --grd-s4: 89.52%;
+  --grd-s5: 100%;
+  background: radial-gradient(
+    var(--grd-spread-x) var(--grd-spread-y) at var(--grd-pos-x) var(--grd-pos-y),
+    var(--grd-c1) var(--grd-s1),
+    var(--grd-c2) var(--grd-s2),
+    var(--grd-c3) var(--grd-s3),
+    var(--grd-c4) var(--grd-s4),
+    var(--grd-c5) var(--grd-s5)
+  );
+
+  border: none;
+
+  transition:
+    --grd-pos-x 0.5s, --grd-pos-y 0.5s,
+    --grd-spread-x 0.5s, --grd-spread-y 0.5s,
+    --grd-c1 0.5s, --grd-c2 0.5s, --grd-c3 0.5s, --grd-c4 0.5s, --grd-c5 0.5s,
+    --grd-s1 0.5s, --grd-s2 0.5s, --grd-s3 0.5s, --grd-s4 0.5s, --grd-s5 0.5s,
+    transform 0.3s ease, box-shadow 0.3s ease;
+
+  box-shadow:
+    0 4px 15px rgba(139, 105, 20, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .cta-primary::before {
   content: "";
   position: absolute;
   inset: 8px 8px -8px;
-  background: linear-gradient(to right, var(--shadow-gold), var(--branch-orange), var(--branch-pink));
+  background: radial-gradient(
+    var(--grd-spread-x) var(--grd-spread-y) at var(--grd-pos-x) var(--grd-pos-y),
+    var(--grd-c1), var(--grd-c3), var(--grd-c5)
+  );
   filter: blur(16px);
   border-radius: inherit;
   z-index: -1;
-  opacity: 0.7;
-  transition: opacity var(--transition-normal);
+  opacity: 0.3;
+  transition: opacity 0.5s ease, filter 0.5s ease;
 }
 
 .cta-primary:hover {
-  background: linear-gradient(135deg, rgba(var(--accent-rgb), 1) 0%, rgba(var(--accent-rgb), 0.9) 100%);
+  /* Hover: vivid gold/orange glow from bottom-left */
+  --grd-pos-x: 0%;
+  --grd-pos-y: 91.51%;
+  --grd-spread-x: 120.24%;
+  --grd-spread-y: 103.18%;
+  --grd-c1: #e7a832;
+  --grd-c2: #d4871a;
+  --grd-c3: #c06a10;
+  --grd-c4: #3a1e05;
+  --grd-c5: #000000;
+  --grd-s1: 0%;
+  --grd-s2: 8.8%;
+  --grd-s3: 21.44%;
+  --grd-s4: 71.34%;
+  --grd-s5: 85.76%;
   transform: translateY(-2px);
   box-shadow:
-    0 8px 25px rgba(var(--accent-rgb), 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    0 8px 25px rgba(231, 168, 50, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .cta-primary:hover::before {
-  opacity: 1;
+  opacity: 0.8;
   filter: blur(20px);
 }
 
@@ -2362,8 +2992,7 @@ watch(vizStep, (newStep) => {
   display: flex;
   gap: 1.5rem;
   flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 1.5rem;
+  justify-content: flex-end;
 }
 
 .trust-tag {
@@ -2386,18 +3015,31 @@ watch(vizStep, (newStep) => {
 /* Scroll indicator */
 .scroll-indicator {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-}
-
-.fade-enter-active,
-.fade-leave-active {
+  gap: 0.5rem;
   transition: opacity 0.6s ease;
 }
 
-.fade-enter-from,
-.fade-leave-to {
+.scroll-indicator-text {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  transition: opacity 0.4s ease;
+}
+
+.scroll-indicator--hidden {
   opacity: 0;
+  pointer-events: none;
+}
+
+.scroll-indicator-text--hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .scroll-arrow {
@@ -2428,11 +3070,14 @@ watch(vizStep, (newStep) => {
 /* BRANCHING VISUALIZATION (HOW IT WORKS) */
 /* ============================================================================= */
 .branching-section {
-  min-height: 100vh;
+  min-height: 100svh;
   padding: 4rem 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  position: relative;
+  z-index: 1;
+  background: var(--bg-primary);
 }
 
 .branching-layout {
@@ -2484,7 +3129,7 @@ watch(vizStep, (newStep) => {
 
 .sidebar-description {
   font-size: 1rem;
-  color: #cdd4de;
+  color: var(--text-description);
   line-height: 1.6;
   flex: 1;
 }
@@ -2524,19 +3169,19 @@ watch(vizStep, (newStep) => {
   width: 12px;
   height: 12px;
   border-radius: var(--radius-full);
-  background: rgba(231, 210, 124, 0.2);
-  border: 2px solid rgba(231, 210, 124, 0.3);
+  background: rgba(var(--accent-rgb), 0.2);
+  border: 2px solid rgba(var(--accent-rgb), 0.3);
   cursor: pointer;
   transition: all var(--transition-normal);
 }
 
 .step-dot.active {
-  background: #E7D27C;
+  background: var(--accent);
   border-color: var(--accent);
 }
 
 .step-dot.current {
-  box-shadow: 0 0 0 4px rgba(231, 210, 124, 0.2);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.2);
 }
 
 /* Flip Container */
@@ -2576,7 +3221,8 @@ watch(vizStep, (newStep) => {
 /* Diagram container */
 .branching-diagram {
   position: relative;
-  background: rgba(15, 23, 42, 0.5);
+  color: var(--accent);
+  background: rgba(10, 10, 10, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -2589,7 +3235,7 @@ watch(vizStep, (newStep) => {
 /* Chat Demo (Back of flip) */
 .chat-demo {
   display: flex;
-  background: rgba(15, 23, 42, 0.95);
+  background: rgba(10, 10, 10, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -2615,7 +3261,7 @@ watch(vizStep, (newStep) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem 1rem;
-  color: #cdd4de;
+  color: var(--text-description);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -2629,8 +3275,8 @@ watch(vizStep, (newStep) => {
   width: 24px;
   height: 24px;
   padding: 4px;
-  background: rgba(231, 210, 124, 0.1);
-  border: 1px solid rgba(231, 210, 124, 0.3);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
   border-radius: var(--radius-sm);
   color: var(--accent);
   cursor: pointer;
@@ -2638,8 +3284,8 @@ watch(vizStep, (newStep) => {
 }
 
 .flip-back-btn:hover {
-  background: rgba(231, 210, 124, 0.2);
-  border-color: rgba(231, 210, 124, 0.5);
+  background: rgba(var(--accent-rgb), 0.2);
+  border-color: rgba(var(--accent-rgb), 0.5);
 }
 
 .flip-back-btn svg {
@@ -2667,7 +3313,7 @@ watch(vizStep, (newStep) => {
 }
 
 .branch-nav-item.active {
-  background: rgba(231, 210, 124, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 .branch-nav-item.sub-branch {
@@ -2682,7 +3328,7 @@ watch(vizStep, (newStep) => {
   top: 0;
   bottom: 50%;
   width: 1px;
-  background: rgba(231, 210, 124, 0.3);
+  background: rgba(var(--accent-rgb), 0.3);
 }
 
 .branch-nav-item.sub-branch::after {
@@ -2692,7 +3338,7 @@ watch(vizStep, (newStep) => {
   top: 50%;
   width: 0.5rem;
   height: 1px;
-  background: rgba(231, 210, 124, 0.3);
+  background: rgba(var(--accent-rgb), 0.3);
 }
 
 /* Extend vertical line for non-last items */
@@ -2708,7 +3354,7 @@ watch(vizStep, (newStep) => {
 }
 
 .branch-nav-indicator.main {
-  background: #E7D27C;
+  background: var(--accent);
 }
 
 .branch-nav-indicator.legal {
@@ -2817,12 +3463,12 @@ watch(vizStep, (newStep) => {
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(231, 210, 124, 0.3);
+  background: rgba(var(--accent-rgb), 0.3);
   border-radius: var(--radius-sm);
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(231, 210, 124, 0.5);
+  background: rgba(var(--accent-rgb), 0.5);
 }
 
 .chat-messages-inner {
@@ -2852,7 +3498,7 @@ watch(vizStep, (newStep) => {
 }
 
 .chat-message.from-main {
-  border-left-color: rgba(231, 210, 124, 0.5);
+  border-left-color: rgba(var(--accent-rgb), 0.5);
 }
 
 .chat-message.from-main.out-of-context {
@@ -2875,7 +3521,7 @@ watch(vizStep, (newStep) => {
 }
 
 .chat-message.assistant .message-avatar {
-  background: rgba(231, 210, 124, 0.2);
+  background: rgba(var(--accent-rgb), 0.2);
   color: var(--accent);
 }
 
@@ -2988,7 +3634,7 @@ watch(vizStep, (newStep) => {
 .branch-point-line {
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(231, 210, 124, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.3), transparent);
 }
 
 .branch-point-label {
@@ -2996,15 +3642,19 @@ watch(vizStep, (newStep) => {
   color: var(--accent);
   white-space: nowrap;
   padding: 0.25rem 0.75rem;
-  background: rgba(231, 210, 124, 0.1);
-  border-radius: 999px;
-  border: 1px solid rgba(231, 210, 124, 0.2);
+  background: rgba(var(--accent-rgb), 0.1);
+  border-radius: 0;
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
 }
 
 .diagram-svg {
   width: 100%;
   height: auto;
   min-height: 400px;
+}
+
+.grid-line {
+  stroke: rgba(var(--accent-rgb), 0.06);
 }
 
 /* Branch paths with hover effect */
@@ -3110,9 +3760,9 @@ watch(vizStep, (newStep) => {
   align-items: center;
   gap: 10px;
   padding: 14px 24px;
-  background: rgba(15, 23, 42, 0.95);
-  border: 2px solid #E7D27C;
-  border-radius: 28px;
+  background: rgba(10, 10, 10, 0.95);
+  border: 2px solid var(--accent);
+  border-radius: 0;
   color: var(--accent);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -3123,9 +3773,9 @@ watch(vizStep, (newStep) => {
 }
 
 .continue-btn:hover {
-  background: rgba(231, 210, 124, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   border-color: var(--accent);
-  box-shadow: 0 0 20px rgba(231, 210, 124, 0.4);
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.4);
 }
 
 .continue-btn svg {
@@ -3149,7 +3799,7 @@ watch(vizStep, (newStep) => {
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  border-radius: 10px;
+  border-radius: 0;
   font-family: var(--font-mono);
   font-size: 16px;
   font-weight: 500;
@@ -3175,8 +3825,8 @@ watch(vizStep, (newStep) => {
 }
 
 .branch-label-main {
-  background: rgba(231, 210, 124, 0.1);
-  border: 1px solid rgba(231, 210, 124, 0.3);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
   color: var(--accent);
 }
 
@@ -3227,7 +3877,7 @@ watch(vizStep, (newStep) => {
 }
 
 .label-dot.main {
-  background: #E7D27C;
+  background: var(--accent);
 }
 
 .label-dot.legal {
@@ -3246,8 +3896,8 @@ watch(vizStep, (newStep) => {
 @media (max-width: 1024px) {
   .branching-section {
     padding: 1.5rem 0;
-    min-height: 100vh;
-    max-height: 100vh;
+    min-height: 100svh;
+    max-height: 100svh;
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -3423,7 +4073,7 @@ watch(vizStep, (newStep) => {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-md);
-    color: #cdd4de;
+    color: var(--text-description);
     font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
@@ -3436,8 +4086,8 @@ watch(vizStep, (newStep) => {
   }
 
   .mobile-tab.active {
-    background: rgba(231, 210, 124, 0.15);
-    border-color: rgba(231, 210, 124, 0.4);
+    background: rgba(var(--accent-rgb), 0.15);
+    border-color: rgba(var(--accent-rgb), 0.4);
     color: var(--accent);
   }
 
@@ -3518,6 +4168,9 @@ watch(vizStep, (newStep) => {
 /* ============================================================================= */
 .features-section {
   padding: 6rem 0;
+  position: relative;
+  z-index: 1;
+  background: var(--bg-primary);
 }
 
 .features-grid {
@@ -3527,16 +4180,16 @@ watch(vizStep, (newStep) => {
 }
 
 .feature-card {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(231, 210, 124, 0.15);
+  background: rgba(20, 20, 20, 0.5);
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
   padding: 1.5rem;
   position: relative;
   transition: all var(--transition-normal);
 }
 
 .feature-card:hover {
-  border-color: rgba(231, 210, 124, 0.4);
-  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(20, 20, 20, 0.8);
 }
 
 .feature-number {
@@ -3545,7 +4198,7 @@ watch(vizStep, (newStep) => {
   right: 1rem;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: rgba(231, 210, 124, 0.4);
+  color: rgba(var(--accent-rgb), 0.4);
 }
 
 .feature-icon {
@@ -3569,7 +4222,7 @@ watch(vizStep, (newStep) => {
 
 .feature-description {
   font-size: 1rem;
-  color: #cdd4de;
+  color: var(--text-description);
   line-height: 1.6;
 }
 
@@ -3578,6 +4231,9 @@ watch(vizStep, (newStep) => {
 /* ============================================================================= */
 .faq-section {
   padding: 6rem 0;
+  position: relative;
+  z-index: 1;
+  background: var(--bg-primary);
 }
 
 .faq-list {
@@ -3586,7 +4242,7 @@ watch(vizStep, (newStep) => {
 }
 
 .faq-item {
-  border-bottom: 1px solid rgba(231, 210, 124, 0.15);
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.15);
 }
 
 .faq-question {
@@ -3638,7 +4294,7 @@ watch(vizStep, (newStep) => {
 }
 
 .faq-answer p {
-  color: #cdd4de;
+  color: var(--text-description);
   font-size: 1.05rem;
   line-height: 1.7;
 }
@@ -3649,7 +4305,10 @@ watch(vizStep, (newStep) => {
 .footer-section {
   padding: 4rem 0;
   text-align: center;
-  border-top: 1px solid rgba(231, 210, 124, 0.15);
+  border-top: 1px solid rgba(var(--accent-rgb), 0.15);
+  position: relative;
+  z-index: 1;
+  background: var(--bg-primary);
 }
 
 .footer-cta-spacing {
@@ -3714,4 +4373,29 @@ a.footer-link:hover {
     stroke-dashoffset: 0;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+</style>
+
+<!-- @property must be in non-scoped style for smooth gradient transitions -->
+<style>
+@property --grd-pos-x { syntax: '<percentage>'; initial-value: 11.14%; inherits: false; }
+@property --grd-pos-y { syntax: '<percentage>'; initial-value: 140%; inherits: false; }
+@property --grd-spread-x { syntax: '<percentage>'; initial-value: 150%; inherits: false; }
+@property --grd-spread-y { syntax: '<percentage>'; initial-value: 180.06%; inherits: false; }
+@property --grd-c1 { syntax: '<color>'; initial-value: #000000; inherits: false; }
+@property --grd-c2 { syntax: '<color>'; initial-value: #08012c; inherits: false; }
+@property --grd-c3 { syntax: '<color>'; initial-value: #4e1e40; inherits: false; }
+@property --grd-c4 { syntax: '<color>'; initial-value: #70464e; inherits: false; }
+@property --grd-c5 { syntax: '<color>'; initial-value: #88394c; inherits: false; }
+@property --grd-s1 { syntax: '<percentage>'; initial-value: 37.35%; inherits: false; }
+@property --grd-s2 { syntax: '<percentage>'; initial-value: 61.36%; inherits: false; }
+@property --grd-s3 { syntax: '<percentage>'; initial-value: 78.42%; inherits: false; }
+@property --grd-s4 { syntax: '<percentage>'; initial-value: 89.52%; inherits: false; }
+@property --grd-s5 { syntax: '<percentage>'; initial-value: 100%; inherits: false; }
 </style>

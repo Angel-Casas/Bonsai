@@ -3,6 +3,7 @@
  * MessageTreeNode - Recursive tree node component
  *
  * Renders a single node and its children recursively.
+ * Shows compact message previews with branch indicators.
  * Supports collapse/expand for performance optimization.
  */
 
@@ -29,7 +30,7 @@ const isCollapsed = computed(() => props.collapsedNodes.has(props.message.id))
 const isActive = computed(() => props.activeMessageId === props.message.id)
 const isInPath = computed(() => props.timelineIds.has(props.message.id))
 const isBranchPoint = computed(() => children.value.length > 1)
-const indentPx = computed(() => props.depth * 16)
+const indentPx = computed(() => props.depth * 12)
 
 // Count of hidden descendants when collapsed
 const hiddenCount = computed(() => {
@@ -47,28 +48,41 @@ const hiddenCount = computed(() => {
   return count
 })
 
-function getMessageLabel(): string {
+function getMessagePreview(): string {
   if (props.message.branchTitle) {
     return props.message.branchTitle
   }
-  const maxLength = 30
-  const content = props.message.content.trim()
+  const maxLength = 25
+  const content = props.message.content.trim().replace(/\n/g, ' ')
   if (content.length <= maxLength) {
     return content || `(${props.message.role})`
   }
-  return content.substring(0, maxLength) + '...'
+  return content.substring(0, maxLength) + '…'
 }
 
-function getRoleIcon(): string {
+function getRoleClass(): string {
   switch (props.message.role) {
     case 'system':
-      return '\u2699\uFE0F' // ⚙️
+      return 'role-system'
     case 'user':
-      return '\uD83D\uDC64' // 👤
+      return 'role-user'
     case 'assistant':
-      return '\uD83E\uDD16' // 🤖
+      return 'role-assistant'
     default:
-      return '\uD83D\uDCAC' // 💬
+      return 'role-system'
+  }
+}
+
+function getRoleLabel(): string {
+  switch (props.message.role) {
+    case 'system':
+      return 'S'
+    case 'user':
+      return 'U'
+    case 'assistant':
+      return 'A'
+    default:
+      return '?'
   }
 }
 
@@ -94,17 +108,28 @@ function handleChildToggleCollapse(messageId: string) {
   <div class="tree-node">
     <div
       class="tree-node-row"
-      :style="{ marginLeft: `${indentPx}px` }"
+      :style="{ paddingLeft: `${indentPx}px` }"
     >
+      <!-- Branch line indicator -->
+      <div v-if="depth > 0" class="branch-line"></div>
+
       <!-- Collapse/expand toggle -->
       <button
         v-if="hasChildren"
         class="collapse-toggle"
-        :class="{ 'is-collapsed': isCollapsed }"
+        :class="{ collapsed: isCollapsed }"
         :title="isCollapsed ? `Expand (${hiddenCount} hidden)` : 'Collapse'"
         @click="handleToggleCollapse"
       >
-        <span class="collapse-icon">{{ isCollapsed ? '\u25B6' : '\u25BC' }}</span>
+        <svg class="collapse-icon" viewBox="0 0 12 12" fill="none">
+          <path
+            d="M4 2L8 6L4 10"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </button>
       <span v-else class="collapse-placeholder"></span>
 
@@ -113,31 +138,40 @@ function handleChildToggleCollapse(messageId: string) {
         :data-testid="`tree-node-${message.id}`"
         class="tree-node-content"
         :class="[
-          isActive
-            ? 'is-active'
-            : isInPath
-              ? 'is-in-path'
-              : 'is-inactive',
+          getRoleClass(),
+          {
+            active: isActive,
+            'in-path': isInPath && !isActive,
+          }
         ]"
         @click="handleClick"
       >
-        <span class="role-icon">{{ getRoleIcon() }}</span>
-        <span
-          class="node-label"
-          :class="{ 'has-branch-title': message.branchTitle }"
-        >
-          {{ getMessageLabel() }}
+        <!-- Role indicator -->
+        <span class="role-indicator" :class="getRoleClass()">
+          {{ getRoleLabel() }}
         </span>
+
+        <!-- Message preview -->
+        <span
+          class="node-preview"
+          :class="{ 'has-title': message.branchTitle }"
+        >
+          {{ getMessagePreview() }}
+        </span>
+
+        <!-- Branch count -->
         <span
           v-if="isBranchPoint"
-          class="branch-count"
+          class="branch-badge"
           :title="`${children.length} branches`"
         >
-          &#8627;{{ children.length }}
+          {{ children.length }}
         </span>
+
+        <!-- Hidden count when collapsed -->
         <span
           v-if="isCollapsed && hiddenCount > 0"
-          class="hidden-count"
+          class="hidden-badge"
           :title="`${hiddenCount} messages hidden`"
         >
           +{{ hiddenCount }}
@@ -167,7 +201,18 @@ function handleChildToggleCollapse(messageId: string) {
 .tree-node-row {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
+  position: relative;
+  min-height: 1.75rem;
+}
+
+.branch-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 50%;
+  width: 1px;
+  background: var(--border-subtle);
 }
 
 .collapse-toggle {
@@ -179,19 +224,26 @@ function handleChildToggleCollapse(messageId: string) {
   padding: 0;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: all var(--transition-fast);
   flex-shrink: 0;
+  border-radius: var(--radius-sm);
 }
 
 .collapse-toggle:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-primary);
+  background: var(--border-muted);
 }
 
 .collapse-icon {
-  font-size: 0.625rem;
-  line-height: 1;
+  width: 0.625rem;
+  height: 0.625rem;
+  transition: transform var(--transition-fast);
+}
+
+.collapse-toggle:not(.collapsed) .collapse-icon {
+  transform: rotate(90deg);
 }
 
 .collapse-placeholder {
@@ -202,42 +254,65 @@ function handleChildToggleCollapse(messageId: string) {
 .tree-node-content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   flex: 1;
   min-width: 0;
   padding: 0.25rem 0.5rem;
   border: none;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.tree-node-content.is-active {
-  background: rgb(5 150 105); /* emerald-600 */
-  color: white;
-}
-
-.tree-node-content.is-in-path {
-  background: rgb(55 65 81); /* gray-700 */
-  color: white;
-}
-
-.tree-node-content.is-inactive {
+  transition: all var(--transition-fast);
   background: transparent;
-  color: rgb(156 163 175); /* gray-400 */
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
 }
 
-.tree-node-content.is-inactive:hover {
-  background: rgb(55 65 81); /* gray-700 */
-  color: rgb(229 231 235); /* gray-200 */
+.tree-node-content:hover {
+  background: var(--border-muted);
+  color: var(--text-primary);
 }
 
-.role-icon {
+.tree-node-content.in-path {
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--text-primary);
+}
+
+.tree-node-content.active {
+  background: rgba(var(--accent-rgb), 0.2);
+  color: var(--accent);
+}
+
+/* Role indicator */
+.role-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
-.node-label {
+.role-indicator.role-system {
+  background: rgba(var(--branch-orange-rgb), 0.15);
+  color: var(--branch-orange);
+}
+
+.role-indicator.role-user {
+  background: rgba(var(--branch-blue-rgb), 0.15);
+  color: var(--branch-blue);
+}
+
+.role-indicator.role-assistant {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+}
+
+.node-preview {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -245,22 +320,32 @@ function handleChildToggleCollapse(messageId: string) {
   white-space: nowrap;
 }
 
-.node-label.has-branch-title {
+.node-preview.has-title {
   font-weight: 500;
+  color: var(--text-primary);
 }
 
-.branch-count {
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  color: rgb(107 114 128); /* gray-500 */
-}
-
-.hidden-count {
-  flex-shrink: 0;
+.branch-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
   font-size: 0.625rem;
-  padding: 0.125rem 0.25rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 0.25rem;
-  color: rgb(156 163 175); /* gray-400 */
+  font-weight: 500;
+  background: var(--branch-pink);
+  color: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.hidden-badge {
+  font-size: 0.625rem;
+  padding: 0.0625rem 0.25rem;
+  background: var(--border-muted);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
 }
 </style>

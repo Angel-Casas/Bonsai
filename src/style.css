@@ -5,9 +5,10 @@
 /* ============================================================================= */
 
 :root {
-  /* Typography */
-  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  /* Typography - easily customizable font variables */
+  --font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-display: 'Space Grotesk', system-ui, sans-serif; /* For headings/titles */
 
   /* Night mode colors (default) */
   --bg-primary: #0f172a;
@@ -20,15 +21,22 @@
   --text-muted: rgba(226, 232, 240, 0.6);
   --accent: #E7D27C;
   --accent-rgb: 231, 210, 124;
-  --accent-hover: #f0dc8a;
+  --accent-hover: #e0a510;
   --border-color: rgba(231, 210, 124, 0.4);
   --border-subtle: rgba(231, 210, 124, 0.15);
   --border-muted: rgba(255, 255, 255, 0.1);
 
   /* Branch colors */
   --branch-blue: #93C5FD;
+  --branch-blue-rgb: 147, 197, 253;
   --branch-pink: #F9A8D4;
+  --branch-pink-rgb: 249, 168, 212;
   --branch-orange: #FDBA74;
+  --branch-orange-rgb: 253, 186, 116;
+
+  /* Overlay/backdrop colors */
+  --overlay-dark: rgba(0, 0, 0, 0.4);
+  --overlay-light: rgba(255, 255, 255, 0.05);
 
   /* Status colors */
   --success: #4ade80;
@@ -37,6 +45,20 @@
   --error-bg: rgba(248, 113, 113, 0.1);
   --warning: #fbbf24;
   --warning-bg: rgba(251, 191, 36, 0.1);
+
+  /* Text for bright badge backgrounds (always dark for contrast) */
+  --text-on-bright: #1e293b;
+
+  /* Glass/transparency effects */
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-bg-solid: rgba(15, 23, 42, 0.85);
+  --glass-border: rgba(231, 210, 124, 0.1);
+  --glass-blur: 12px;
+
+  /* Button transparency */
+  --btn-ghost-bg: transparent;
+  --btn-ghost-hover: rgba(231, 210, 124, 0.1);
+  --btn-ghost-border: rgba(231, 210, 124, 0.2);
 
   /* Border radius */
   --radius-sm: 4px;
@@ -62,6 +84,17 @@
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.25);
   --shadow-accent: 0 4px 15px rgba(231, 210, 124, 0.3);
 
+  /* Z-index scale */
+  --z-base: 1;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-overlay: 200;
+  --z-modal: 999;
+  --z-navbar: 1000;
+  --z-navbar-dropdown: 1001;
+  --z-popover: 1100;
+  --z-tutorial: 9000;
+
   /* Base styles */
   font-family: var(--font-sans);
   line-height: 1.5;
@@ -75,6 +108,11 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html {
+  /* Prevent layout shift when scrollbar appears/disappears */
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -86,9 +124,196 @@ body {
 }
 
 /* ============================================================================= */
-/* DAY MODE - Warm Pastel Theme Override */
+/* DAY MODE - Base styles */
 /* ============================================================================= */
 .day-mode {
+  /* Overlay/backdrop colors - day mode */
+  --overlay-dark: rgba(0, 0, 0, 0.3);
+  --overlay-light: rgba(0, 0, 0, 0.03);
+
+  /* Shadows - lighter for day mode */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+  /* Glass/transparency effects - day mode */
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-solid: rgba(255, 255, 255, 0.9);
+
+  color-scheme: light;
+}
+
+/* ============================================================================= */
+/* COLOR PALETTES - Day Mode */
+/* ============================================================================= */
+
+/* Sky & Honey - Soft blue-white background with warm honey accent */
+.day-mode.palette-cream-sage {
+  --bg-primary: #F8FAFF;
+  --bg-secondary: rgba(248, 250, 255, 0.95);
+  --bg-tertiary: rgba(248, 250, 255, 0.98);
+  --bg-card: #fff;
+  --bg-card-hover: #F5F8FC;
+  --text-primary: #2A3040;
+  --text-secondary: #5A6070;
+  --text-muted: rgba(42, 48, 64, 0.6);
+  --accent: #D4A855;
+  --accent-rgb: 212, 168, 85;
+  --accent-hover: #C49845;
+  --border-color: #D4A855;
+  --border-subtle: #E0D8C8;
+  --border-muted: rgba(212, 168, 85, 0.12);
+  --shadow-accent: 0 4px 15px rgba(212, 168, 85, 0.3);
+  --glass-border: rgba(212, 168, 85, 0.15);
+  --btn-ghost-hover: rgba(212, 168, 85, 0.15);
+  --btn-ghost-border: rgba(212, 168, 85, 0.3);
+  --branch-blue: #7EB5D8;
+  --branch-blue-rgb: 126, 181, 216;
+  --branch-pink: #D8A4B8;
+  --branch-pink-rgb: 216, 164, 184;
+  --branch-orange: #D8B87E;
+  --branch-orange-rgb: 216, 184, 126;
+  /* Blob colors for Lines background - honey gold & soft sky blue */
+  --blob-1: #D4A855;
+  --blob-1-dark: #B89040;
+  --blob-2: #A8C8E8;
+  --blob-2-dark: #88B0D0;
+}
+
+/* Blush & Coral - Soft pink background with coral accent */
+.day-mode.palette-blush-coral {
+  --bg-primary: #FFF0F3;
+  --bg-secondary: rgba(255, 240, 243, 0.95);
+  --bg-tertiary: rgba(255, 240, 243, 0.98);
+  --bg-card: #fff;
+  --bg-card-hover: #FFF5F7;
+  --text-primary: #3D2A30;
+  --text-secondary: #6B5058;
+  --text-muted: rgba(61, 42, 48, 0.6);
+  --accent: #E8A0A0;
+  --accent-rgb: 232, 160, 160;
+  --accent-hover: #D88888;
+  --border-color: #E8A0A0;
+  --border-subtle: #E8D0D4;
+  --border-muted: rgba(232, 160, 160, 0.12);
+  --shadow-accent: 0 4px 15px rgba(232, 160, 160, 0.3);
+  --glass-border: rgba(232, 160, 160, 0.15);
+  --btn-ghost-hover: rgba(232, 160, 160, 0.15);
+  --btn-ghost-border: rgba(232, 160, 160, 0.3);
+  --branch-blue: #A0C0D8;
+  --branch-blue-rgb: 160, 192, 216;
+  --branch-pink: #D8A0C0;
+  --branch-pink-rgb: 216, 160, 192;
+  --branch-orange: #D8B8A0;
+  --branch-orange-rgb: 216, 184, 160;
+  /* Blob colors for Lines background - coral & soft lavender */
+  --blob-1: #E8A0A0;
+  --blob-1-dark: #D08080;
+  --blob-2: #C8B8D8;
+  --blob-2-dark: #A8A0C0;
+}
+
+/* Lavender & Plum - Light lavender background with plum accent */
+.day-mode.palette-lavender-plum {
+  --bg-primary: #F5F0FF;
+  --bg-secondary: rgba(245, 240, 255, 0.95);
+  --bg-tertiary: rgba(245, 240, 255, 0.98);
+  --bg-card: #fff;
+  --bg-card-hover: #F8F5FF;
+  --text-primary: #2D2A3D;
+  --text-secondary: #58506B;
+  --text-muted: rgba(45, 42, 61, 0.6);
+  --accent: #B8A0D0;
+  --accent-rgb: 184, 160, 208;
+  --accent-hover: #A888C0;
+  --border-color: #B8A0D0;
+  --border-subtle: #D8D0E8;
+  --border-muted: rgba(184, 160, 208, 0.12);
+  --shadow-accent: 0 4px 15px rgba(184, 160, 208, 0.3);
+  --glass-border: rgba(184, 160, 208, 0.15);
+  --btn-ghost-hover: rgba(184, 160, 208, 0.15);
+  --btn-ghost-border: rgba(184, 160, 208, 0.3);
+  --branch-blue: #A0B8D8;
+  --branch-blue-rgb: 160, 184, 216;
+  --branch-pink: #D0A0C8;
+  --branch-pink-rgb: 208, 160, 200;
+  --branch-orange: #D0B8A0;
+  --branch-orange-rgb: 208, 184, 160;
+  /* Blob colors for Lines background - lavender & soft rose */
+  --blob-1: #B8A0D0;
+  --blob-1-dark: #9880B8;
+  --blob-2: #E0B8C0;
+  --blob-2-dark: #C8A0A8;
+}
+
+/* Mint & Lavender - Soft white with mint and lavender blobs */
+.day-mode.palette-mint-teal {
+  --bg-primary: #F8FAF8;
+  --bg-secondary: rgba(248, 250, 248, 0.95);
+  --bg-tertiary: rgba(248, 250, 248, 0.98);
+  --bg-card: #fff;
+  --bg-card-hover: #F4F6F4;
+  --text-primary: #283028;
+  --text-secondary: #485048;
+  --text-muted: rgba(40, 48, 40, 0.6);
+  --accent: #60A088;
+  --accent-rgb: 96, 160, 136;
+  --accent-hover: #509078;
+  --border-color: #60A088;
+  --border-subtle: #D0DCD8;
+  --border-muted: rgba(96, 160, 136, 0.12);
+  --shadow-accent: 0 4px 15px rgba(96, 160, 136, 0.3);
+  --glass-border: rgba(96, 160, 136, 0.15);
+  --btn-ghost-hover: rgba(96, 160, 136, 0.15);
+  --btn-ghost-border: rgba(96, 160, 136, 0.3);
+  --branch-blue: #80A8B8;
+  --branch-blue-rgb: 128, 168, 184;
+  --branch-pink: #C8A8C8;
+  --branch-pink-rgb: 200, 168, 200;
+  --branch-orange: #D8C090;
+  --branch-orange-rgb: 216, 192, 144;
+  /* Blob colors for Lines background - soft mint & soft lavender */
+  --blob-1: #A8E0D0;
+  --blob-1-dark: #90C8B8;
+  --blob-2: #D8C8E8;
+  --blob-2-dark: #C0B0D0;
+}
+
+/* Coral & Honey - Warm cream with coral and honey blobs */
+.day-mode.palette-peach-terracotta {
+  --bg-primary: #FFF8F2;
+  --bg-secondary: rgba(255, 248, 242, 0.95);
+  --bg-tertiary: rgba(255, 248, 242, 0.98);
+  --bg-card: #fff;
+  --bg-card-hover: #FBF4EE;
+  --text-primary: #352820;
+  --text-secondary: #584840;
+  --text-muted: rgba(53, 40, 32, 0.6);
+  --accent: #C08060;
+  --accent-rgb: 192, 128, 96;
+  --accent-hover: #B07050;
+  --border-color: #C08060;
+  --border-subtle: #E8D8CC;
+  --border-muted: rgba(192, 128, 96, 0.12);
+  --shadow-accent: 0 4px 15px rgba(192, 128, 96, 0.3);
+  --glass-border: rgba(192, 128, 96, 0.15);
+  --btn-ghost-hover: rgba(192, 128, 96, 0.15);
+  --btn-ghost-border: rgba(192, 128, 96, 0.3);
+  --branch-blue: #90A0B8;
+  --branch-blue-rgb: 144, 160, 184;
+  --branch-pink: #D8A898;
+  --branch-pink-rgb: 216, 168, 152;
+  --branch-orange: #E8C088;
+  --branch-orange-rgb: 232, 192, 136;
+  /* Blob colors for Lines background - warm coral & soft honey */
+  --blob-1: #E8A090;
+  --blob-1-dark: #D08878;
+  --blob-2: #F0D890;
+  --blob-2-dark: #D8C078;
+}
+
+/* Classic Day - Original warm cream theme with teal & yellow blobs */
+.day-mode.palette-classic-day {
   --bg-primary: #fff8f0;
   --bg-secondary: rgba(255, 248, 240, 0.85);
   --bg-tertiary: rgba(255, 248, 240, 0.95);
@@ -103,29 +328,319 @@ body {
   --border-color: rgba(196, 149, 106, 0.5);
   --border-subtle: rgba(196, 149, 106, 0.25);
   --border-muted: rgba(0, 0, 0, 0.08);
-
-  /* Branch colors - slightly adjusted for day mode */
-  --branch-blue: #7eb5e8;
-  --branch-pink: #e8a4c4;
-  --branch-orange: #e8b07e;
-
-  /* Shadows - lighter for day mode */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
   --shadow-accent: 0 4px 15px rgba(196, 149, 106, 0.3);
-
-  color-scheme: light;
+  --glass-border: rgba(196, 149, 106, 0.15);
+  --btn-ghost-hover: rgba(196, 149, 106, 0.15);
+  --btn-ghost-border: rgba(196, 149, 106, 0.3);
+  --branch-blue: #7eb5e8;
+  --branch-blue-rgb: 126, 181, 232;
+  --branch-pink: #e8a4c4;
+  --branch-pink-rgb: 232, 164, 196;
+  --branch-orange: #e8b07e;
+  --branch-orange-rgb: 232, 176, 126;
+  /* Blob colors for Lines background - original teal & yellow */
+  --blob-1: #5eead4;
+  --blob-1-dark: #2dd4bf;
+  --blob-2: #fde68a;
+  --blob-2-dark: #fcd34d;
 }
 
-/* Smooth theme transitions on root */
+/* Blueprint Day - Low-resource grid background (matches landing page) */
+.day-mode.palette-blueprint-day {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: rgba(255, 255, 255, 0.95);
+  --bg-tertiary: rgba(255, 255, 255, 0.98);
+  --bg-card: #f8faff;
+  --bg-card-hover: #eef2ff;
+  --text-primary: #0a1628;
+  --text-secondary: #578cff;
+  --text-muted: rgba(2, 39, 246, 0.5);
+  --accent: #0227f6;
+  --accent-rgb: 2, 39, 246;
+  --accent-hover: #011DC4;
+  --border-color: rgba(2, 39, 246, 0.4);
+  --border-subtle: rgba(2, 39, 246, 0.15);
+  --border-muted: rgba(0, 0, 0, 0.08);
+  --shadow-accent: 0 4px 15px rgba(2, 39, 246, 0.3);
+  --glass-border: rgba(2, 39, 246, 0.1);
+  --btn-ghost-hover: rgba(2, 39, 246, 0.1);
+  --btn-ghost-border: rgba(2, 39, 246, 0.2);
+  --branch-blue: #7eb5e8;
+  --branch-blue-rgb: 126, 181, 232;
+  --branch-pink: #e8a4c4;
+  --branch-pink-rgb: 232, 164, 196;
+  --branch-orange: #e8b07e;
+  --branch-orange-rgb: 232, 176, 126;
+  /* Grid line color for Blueprint background */
+  --grid-line: rgba(2, 39, 246, 0.08);
+  --grid-opacity: 0.5;
+  /* No blob colors - blueprint uses grid instead */
+  --blob-1: transparent;
+  --blob-1-dark: transparent;
+  --blob-2: transparent;
+  --blob-2-dark: transparent;
+}
+
+/* ============================================================================= */
+/* COLOR PALETTES - Night Mode */
+/* ============================================================================= */
+
+/* Charcoal & Rose - Dark grey with dusty rose accent */
+.palette-charcoal-rose {
+  --bg-primary: #1a1a20;
+  --bg-secondary: rgba(26, 26, 32, 0.85);
+  --bg-tertiary: rgba(26, 26, 32, 0.95);
+  --bg-card: #252530;
+  --bg-card-hover: #353540;
+  --text-primary: #e8e0e4;
+  --text-secondary: #a09098;
+  --text-muted: rgba(232, 224, 228, 0.6);
+  --accent: #D4A0B0;
+  --accent-rgb: 212, 160, 176;
+  --accent-hover: #E0B0C0;
+  --border-color: rgba(212, 160, 176, 0.4);
+  --border-subtle: rgba(212, 160, 176, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(212, 160, 176, 0.3);
+  --glass-bg: rgba(26, 26, 32, 0.6);
+  --glass-bg-solid: rgba(26, 26, 32, 0.85);
+  --glass-border: rgba(212, 160, 176, 0.1);
+  --btn-ghost-hover: rgba(212, 160, 176, 0.1);
+  --btn-ghost-border: rgba(212, 160, 176, 0.2);
+  --branch-blue: #A0C0D8;
+  --branch-blue-rgb: 160, 192, 216;
+  --branch-pink: #E0A8C0;
+  --branch-pink-rgb: 224, 168, 192;
+  --branch-orange: #D8B8A0;
+  --branch-orange-rgb: 216, 184, 160;
+  /* Blob colors for Lines background - dusty rose & soft blue */
+  --blob-1: #D4A0B0;
+  --blob-1-dark: #B08090;
+  --blob-2: #A0B8D0;
+  --blob-2-dark: #8098B0;
+}
+
+/* Navy & Seafoam - Deep navy with seafoam green accent */
+.palette-navy-seafoam {
+  --bg-primary: #0d1520;
+  --bg-secondary: rgba(13, 21, 32, 0.85);
+  --bg-tertiary: rgba(13, 21, 32, 0.95);
+  --bg-card: #182530;
+  --bg-card-hover: #283540;
+  --text-primary: #e0f0f0;
+  --text-secondary: #90a8a8;
+  --text-muted: rgba(224, 240, 240, 0.6);
+  --accent: #88C0B0;
+  --accent-rgb: 136, 192, 176;
+  --accent-hover: #98D0C0;
+  --border-color: rgba(136, 192, 176, 0.4);
+  --border-subtle: rgba(136, 192, 176, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(136, 192, 176, 0.3);
+  --glass-bg: rgba(13, 21, 32, 0.6);
+  --glass-bg-solid: rgba(13, 21, 32, 0.85);
+  --glass-border: rgba(136, 192, 176, 0.1);
+  --btn-ghost-hover: rgba(136, 192, 176, 0.1);
+  --btn-ghost-border: rgba(136, 192, 176, 0.2);
+  --branch-blue: #88B8D0;
+  --branch-blue-rgb: 136, 184, 208;
+  --branch-pink: #C8A0B8;
+  --branch-pink-rgb: 200, 160, 184;
+  --branch-orange: #C8B888;
+  --branch-orange-rgb: 200, 184, 136;
+  /* Blob colors for Lines background - seafoam & warm coral */
+  --blob-1: #88C0B0;
+  --blob-1-dark: #60A090;
+  --blob-2: #D8A090;
+  --blob-2-dark: #C08070;
+}
+
+/* Slate & Amber - Slate grey with warm amber accent */
+.palette-slate-amber {
+  --bg-primary: #1e1e24;
+  --bg-secondary: rgba(30, 30, 36, 0.85);
+  --bg-tertiary: rgba(30, 30, 36, 0.95);
+  --bg-card: #2a2a32;
+  --bg-card-hover: #3a3a44;
+  --text-primary: #f0e8e0;
+  --text-secondary: #a8a090;
+  --text-muted: rgba(240, 232, 224, 0.6);
+  --accent: #D4B070;
+  --accent-rgb: 212, 176, 112;
+  --accent-hover: #E0C080;
+  --border-color: rgba(212, 176, 112, 0.4);
+  --border-subtle: rgba(212, 176, 112, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(212, 176, 112, 0.3);
+  --glass-bg: rgba(30, 30, 36, 0.6);
+  --glass-bg-solid: rgba(30, 30, 36, 0.85);
+  --glass-border: rgba(212, 176, 112, 0.1);
+  --btn-ghost-hover: rgba(212, 176, 112, 0.1);
+  --btn-ghost-border: rgba(212, 176, 112, 0.2);
+  --branch-blue: #90B8D0;
+  --branch-blue-rgb: 144, 184, 208;
+  --branch-pink: #D0A8B8;
+  --branch-pink-rgb: 208, 168, 184;
+  --branch-orange: #E0C088;
+  --branch-orange-rgb: 224, 192, 136;
+  /* Blob colors for Lines background - warm amber & dusty lavender */
+  --blob-1: #D4B070;
+  --blob-1-dark: #B09050;
+  --blob-2: #B8A0C0;
+  --blob-2-dark: #9880A0;
+}
+
+/* Midnight & Violet - Deep purple-black with soft violet accent */
+.palette-midnight-violet {
+  --bg-primary: #12101a;
+  --bg-secondary: rgba(18, 16, 26, 0.85);
+  --bg-tertiary: rgba(18, 16, 26, 0.95);
+  --bg-card: #1c1824;
+  --bg-card-hover: #282432;
+  --text-primary: #e8e4f0;
+  --text-secondary: #a098b0;
+  --text-muted: rgba(232, 228, 240, 0.6);
+  --accent: #A890C8;
+  --accent-rgb: 168, 144, 200;
+  --accent-hover: #B8A0D8;
+  --border-color: rgba(168, 144, 200, 0.4);
+  --border-subtle: rgba(168, 144, 200, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(168, 144, 200, 0.3);
+  --glass-bg: rgba(18, 16, 26, 0.6);
+  --glass-bg-solid: rgba(18, 16, 26, 0.85);
+  --glass-border: rgba(168, 144, 200, 0.1);
+  --btn-ghost-hover: rgba(168, 144, 200, 0.1);
+  --btn-ghost-border: rgba(168, 144, 200, 0.2);
+  --branch-blue: #90A8D8;
+  --branch-blue-rgb: 144, 168, 216;
+  --branch-pink: #D8A0C0;
+  --branch-pink-rgb: 216, 160, 192;
+  --branch-orange: #D0B8A0;
+  --branch-orange-rgb: 208, 184, 160;
+  /* Blob colors for Lines background - soft violet & warm rose */
+  --blob-1: #A890C8;
+  --blob-1-dark: #8870A8;
+  --blob-2: #D0A0A8;
+  --blob-2-dark: #B88890;
+}
+
+/* Forest & Copper - Deep forest green-black with copper accent */
+.palette-forest-copper {
+  --bg-primary: #101814;
+  --bg-secondary: rgba(16, 24, 20, 0.85);
+  --bg-tertiary: rgba(16, 24, 20, 0.95);
+  --bg-card: #182420;
+  --bg-card-hover: #24322c;
+  --text-primary: #e4f0e8;
+  --text-secondary: #98b0a0;
+  --text-muted: rgba(228, 240, 232, 0.6);
+  --accent: #C89870;
+  --accent-rgb: 200, 152, 112;
+  --accent-hover: #D8A880;
+  --border-color: rgba(200, 152, 112, 0.4);
+  --border-subtle: rgba(200, 152, 112, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(200, 152, 112, 0.3);
+  --glass-bg: rgba(16, 24, 20, 0.6);
+  --glass-bg-solid: rgba(16, 24, 20, 0.85);
+  --glass-border: rgba(200, 152, 112, 0.1);
+  --btn-ghost-hover: rgba(200, 152, 112, 0.1);
+  --btn-ghost-border: rgba(200, 152, 112, 0.2);
+  --branch-blue: #88B8B0;
+  --branch-blue-rgb: 136, 184, 176;
+  --branch-pink: #C8A0A8;
+  --branch-pink-rgb: 200, 160, 168;
+  --branch-orange: #D8B888;
+  --branch-orange-rgb: 216, 184, 136;
+  /* Blob colors for Lines background - copper & soft sage */
+  --blob-1: #C89870;
+  --blob-1-dark: #A87850;
+  --blob-2: #88A890;
+  --blob-2-dark: #688870;
+}
+
+/* Classic Night - Original midnight gold theme with blue & orange blobs */
+.palette-classic-night {
+  --bg-primary: #0f172a;
+  --bg-secondary: rgba(15, 23, 42, 0.85);
+  --bg-tertiary: rgba(15, 23, 42, 0.95);
+  --bg-card: #1e293b;
+  --bg-card-hover: #334155;
+  --text-primary: #e2e8f0;
+  --text-secondary: #929ca9;
+  --text-muted: rgba(226, 232, 240, 0.6);
+  --accent: #E7D27C;
+  --accent-rgb: 231, 210, 124;
+  --accent-hover: #e0a510;
+  --border-color: rgba(231, 210, 124, 0.4);
+  --border-subtle: rgba(231, 210, 124, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(231, 210, 124, 0.3);
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-bg-solid: rgba(15, 23, 42, 0.85);
+  --glass-border: rgba(231, 210, 124, 0.1);
+  --btn-ghost-hover: rgba(231, 210, 124, 0.1);
+  --btn-ghost-border: rgba(231, 210, 124, 0.2);
+  --branch-blue: #93C5FD;
+  --branch-blue-rgb: 147, 197, 253;
+  --branch-pink: #F9A8D4;
+  --branch-pink-rgb: 249, 168, 212;
+  --branch-orange: #FDBA74;
+  --branch-orange-rgb: 253, 186, 116;
+  /* Blob colors for Lines background - original blue & orange */
+  --blob-1: #4a8ad8;
+  --blob-1-dark: #2a5a9c;
+  --blob-2: #f8a040;
+  --blob-2-dark: #e87020;
+}
+
+/* Blueprint Night - Low-resource grid background */
+.palette-blueprint-night {
+  --bg-primary: #000000;
+  --bg-secondary: rgba(10, 10, 10, 0.85);
+  --bg-tertiary: rgba(10, 10, 10, 0.95);
+  --bg-card: #111111;
+  --bg-card-hover: #1a1a1a;
+  --text-primary: #e2e8f0;
+  --text-secondary: #929ca9;
+  --text-muted: rgba(226, 232, 240, 0.6);
+  --accent: #E7D27C;
+  --accent-rgb: 231, 210, 124;
+  --accent-hover: #f0dc8a;
+  --border-color: rgba(231, 210, 124, 0.4);
+  --border-subtle: rgba(231, 210, 124, 0.15);
+  --border-muted: rgba(255, 255, 255, 0.1);
+  --shadow-accent: 0 4px 15px rgba(231, 210, 124, 0.3);
+  --glass-bg: rgba(0, 0, 0, 0.6);
+  --glass-bg-solid: rgba(0, 0, 0, 0.85);
+  --glass-border: rgba(231, 210, 124, 0.1);
+  --btn-ghost-hover: rgba(231, 210, 124, 0.1);
+  --btn-ghost-border: rgba(231, 210, 124, 0.2);
+  --branch-blue: #93C5FD;
+  --branch-blue-rgb: 147, 197, 253;
+  --branch-pink: #F9A8D4;
+  --branch-pink-rgb: 249, 168, 212;
+  --branch-orange: #FDBA74;
+  --branch-orange-rgb: 253, 186, 116;
+  /* Grid line color for Blueprint background */
+  --grid-line: rgba(231, 210, 124, 0.15);
+  --grid-opacity: 0.5;
+  /* No blob colors - blueprint uses grid instead */
+  --blob-1: transparent;
+  --blob-1-dark: transparent;
+  --blob-2: transparent;
+  --blob-2-dark: transparent;
+}
+
+/* Smooth theme transitions on root (background instant, text color transitions) */
 :root {
-  transition: background-color 0.4s ease, color 0.4s ease;
+  transition: color 0.4s ease;
 }
 
 :root.day-mode {
-  background-color: #fff8f0;
-  color: #2d2a26;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 /* ============================================================================= */
@@ -362,16 +877,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
   padding: 1rem;
 }
 
 .dialog-content {
   width: 100%;
   max-width: 28rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg-solid);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   padding: 1.5rem;
   box-shadow: var(--shadow-lg);

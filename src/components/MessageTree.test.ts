@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import MessageTree from './MessageTree.vue'
-import MessageTreeNode from './MessageTreeNode.vue'
 import type { Message } from '@/db/types'
 import { buildChildrenMap } from '@/db/treeUtils'
 
@@ -26,6 +26,10 @@ function createMessage(
 }
 
 describe('MessageTree', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('renders empty state when no messages', () => {
     const messages: Message[] = []
     const messageMap = new Map<string, Message>()
@@ -41,29 +45,19 @@ describe('MessageTree', () => {
         activeMessageId: null,
         timelineIds: new Set<string>(),
       },
-      global: {
-        components: { MessageTreeNode },
-      },
     })
 
     expect(wrapper.find('[data-testid="message-tree"]').exists()).toBe(true)
-    expect(wrapper.findAllComponents(MessageTreeNode)).toHaveLength(0)
+    expect(wrapper.find('.empty-tree').exists()).toBe(true)
   })
 
-  it('renders correct hierarchical structure from seeded data', () => {
-    // Create a tree structure:
-    // root (system)
-    //   └── msg1 (user)
-    //       ├── msg2 (assistant)
-    //       │   └── msg3 (user)
-    //       └── msg4 (user, branch)
+  it('renders main conversation branch for linear conversation', () => {
+    // Create a linear conversation (no branches)
     const root = createMessage('root', 'System prompt', 'system', null)
     const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
     const msg2 = createMessage('msg2', 'Hi there!', 'assistant', 'msg1')
-    const msg3 = createMessage('msg3', 'How are you?', 'user', 'msg2')
-    const msg4 = createMessage('msg4', 'Alternative', 'user', 'msg1', 'Alternative Branch')
 
-    const messages = [root, msg1, msg2, msg3, msg4]
+    const messages = [root, msg1, msg2]
     const messageMap = new Map(messages.map((m) => [m.id, m]))
     const childrenMap = buildChildrenMap(messageMap)
     const rootMessages = [root]
@@ -74,26 +68,64 @@ describe('MessageTree', () => {
         messageMap,
         childrenMap,
         rootMessages,
-        activeMessageId: 'msg3',
-        timelineIds: new Set(['root', 'msg1', 'msg2', 'msg3']),
-      },
-      global: {
-        components: { MessageTreeNode },
+        activeMessageId: 'msg2',
+        timelineIds: new Set(['root', 'msg1', 'msg2']),
       },
     })
 
-    // Should render all 5 nodes
-    expect(wrapper.findAll('[data-testid^="tree-node-"]')).toHaveLength(5)
+    // Should render one branch (main conversation)
+    const branches = wrapper.findAll('.branch-item')
+    expect(branches.length).toBe(1)
 
-    // Check specific nodes exist
-    expect(wrapper.find('[data-testid="tree-node-root"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="tree-node-msg1"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="tree-node-msg2"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="tree-node-msg3"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="tree-node-msg4"]').exists()).toBe(true)
+    // Branch should show message count
+    expect(wrapper.find('.branch-count').text()).toBe('3')
+
+    // Branch should be active
+    expect(branches[0]!.classes()).toContain('active')
   })
 
-  it('emits select event when clicking a tree node', async () => {
+  it('renders child branches when conversation has branch points', () => {
+    // Create a tree with branches:
+    // root (system)
+    //   └── msg1 (user) - has 2 children but only msg3 has a title
+    //       ├── msg2 (assistant) - untitled, part of main path
+    //       └── msg3 (assistant, titled "Alternative") - shown as child branch
+    //
+    // Expected tree structure:
+    // - Main conversation (root → msg1 → msg2) - follows untitled path
+    //   └── "Alternative" (msg3) - explicitly titled branch
+    const root = createMessage('root', 'System prompt', 'system', null)
+    const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
+    const msg2 = createMessage('msg2', 'Hi there!', 'assistant', 'msg1')
+    const msg3 = createMessage('msg3', 'Alternative response', 'assistant', 'msg1', 'Alternative')
+
+    const messages = [root, msg1, msg2, msg3]
+    const messageMap = new Map(messages.map((m) => [m.id, m]))
+    const childrenMap = buildChildrenMap(messageMap)
+    const rootMessages = [root]
+
+    const wrapper = mount(MessageTree, {
+      props: {
+        messages,
+        messageMap,
+        childrenMap,
+        rootMessages,
+        activeMessageId: 'msg2',
+        timelineIds: new Set(['root', 'msg1', 'msg2']),
+      },
+    })
+
+    // Should render main branch + 1 titled child branch
+    // (untitled msg2 is part of main branch, not a separate item)
+    const branches = wrapper.findAll('.branch-item')
+    expect(branches.length).toBe(2)
+
+    // Only the titled branch should have 'child' class
+    const childBranches = wrapper.findAll('.branch-item.child')
+    expect(childBranches.length).toBe(1)
+  })
+
+  it('emits select event when clicking a branch', async () => {
     const root = createMessage('root', 'System prompt', 'system', null)
     const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
 
@@ -111,52 +143,17 @@ describe('MessageTree', () => {
         activeMessageId: 'root',
         timelineIds: new Set(['root']),
       },
-      global: {
-        components: { MessageTreeNode },
-      },
     })
 
-    // Click on msg1
-    await wrapper.find('[data-testid="tree-node-msg1"]').trigger('click')
+    // Click on the branch
+    await wrapper.find('.branch-item').trigger('click')
 
-    // Check that select event was emitted with correct message ID
+    // Check that select event was emitted (with the leaf message ID)
     expect(wrapper.emitted('select')).toBeTruthy()
     expect(wrapper.emitted('select')![0]).toEqual(['msg1'])
   })
 
-  it('highlights active message node', () => {
-    const root = createMessage('root', 'System prompt', 'system', null)
-    const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
-
-    const messages = [root, msg1]
-    const messageMap = new Map(messages.map((m) => [m.id, m]))
-    const childrenMap = buildChildrenMap(messageMap)
-    const rootMessages = [root]
-
-    const wrapper = mount(MessageTree, {
-      props: {
-        messages,
-        messageMap,
-        childrenMap,
-        rootMessages,
-        activeMessageId: 'msg1',
-        timelineIds: new Set(['root', 'msg1']),
-      },
-      global: {
-        components: { MessageTreeNode },
-      },
-    })
-
-    // Active node should have is-active class
-    const activeNode = wrapper.find('[data-testid="tree-node-msg1"]')
-    expect(activeNode.classes()).toContain('is-active')
-
-    // Non-active node in path should have is-in-path class
-    const pathNode = wrapper.find('[data-testid="tree-node-root"]')
-    expect(pathNode.classes()).toContain('is-in-path')
-  })
-
-  it('shows branch indicator for nodes with multiple children', () => {
+  it('highlights active branch', () => {
     const root = createMessage('root', 'System prompt', 'system', null)
     const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
     const msg2 = createMessage('msg2', 'Response 1', 'assistant', 'msg1')
@@ -176,22 +173,20 @@ describe('MessageTree', () => {
         activeMessageId: 'msg2',
         timelineIds: new Set(['root', 'msg1', 'msg2']),
       },
-      global: {
-        components: { MessageTreeNode },
-      },
     })
 
-    // msg1 should show branch indicator (has 2 children)
-    const msg1Node = wrapper.find('[data-testid="tree-node-msg1"]')
-    expect(msg1Node.text()).toContain('↳2')
+    // Main branch and one child branch should be active
+    const activeBranches = wrapper.findAll('.branch-item.active')
+    expect(activeBranches.length).toBeGreaterThan(0)
   })
 
   it('displays branch title when available', () => {
     const root = createMessage('root', 'System prompt', 'system', null)
     const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
-    const branchMsg = createMessage('branch', 'Branch content', 'user', 'root', 'My Branch')
+    const msg2 = createMessage('msg2', 'Response', 'assistant', 'msg1')
+    const branchMsg = createMessage('branch', 'Branch content', 'user', 'msg1', 'My Custom Branch')
 
-    const messages = [root, msg1, branchMsg]
+    const messages = [root, msg1, msg2, branchMsg]
     const messageMap = new Map(messages.map((m) => [m.id, m]))
     const childrenMap = buildChildrenMap(messageMap)
     const rootMessages = [root]
@@ -202,16 +197,39 @@ describe('MessageTree', () => {
         messageMap,
         childrenMap,
         rootMessages,
-        activeMessageId: 'msg1',
-        timelineIds: new Set(['root', 'msg1']),
-      },
-      global: {
-        components: { MessageTreeNode },
+        activeMessageId: 'msg2',
+        timelineIds: new Set(['root', 'msg1', 'msg2']),
       },
     })
 
-    // Branch node should show branch title
-    const branchNode = wrapper.find('[data-testid="tree-node-branch"]')
-    expect(branchNode.text()).toContain('My Branch')
+    // Should show the custom branch title
+    expect(wrapper.text()).toContain('My Custom Branch')
+  })
+
+  it('shows message count for each branch', () => {
+    // Linear conversation with 4 messages
+    const root = createMessage('root', 'System prompt', 'system', null)
+    const msg1 = createMessage('msg1', 'Hello', 'user', 'root')
+    const msg2 = createMessage('msg2', 'Hi', 'assistant', 'msg1')
+    const msg3 = createMessage('msg3', 'How are you?', 'user', 'msg2')
+
+    const messages = [root, msg1, msg2, msg3]
+    const messageMap = new Map(messages.map((m) => [m.id, m]))
+    const childrenMap = buildChildrenMap(messageMap)
+    const rootMessages = [root]
+
+    const wrapper = mount(MessageTree, {
+      props: {
+        messages,
+        messageMap,
+        childrenMap,
+        rootMessages,
+        activeMessageId: 'msg3',
+        timelineIds: new Set(['root', 'msg1', 'msg2', 'msg3']),
+      },
+    })
+
+    // Branch should show count of 4
+    expect(wrapper.find('.branch-count').text()).toBe('4')
   })
 })

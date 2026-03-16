@@ -11,24 +11,32 @@
  * - Stop generation button when streaming
  */
 
-import { ref, computed, watch } from 'vue'
-import { 
-  AVAILABLE_MODELS, 
-  DEFAULT_MODEL, 
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import {
+  DEFAULT_MODEL,
   SEARCH_PRESETS,
   buildEffectiveModel,
   type SearchPreset,
 } from '@/api/nanogpt'
+import { useModelsStore } from '@/stores/modelsStore'
+import { useSettingsPanel } from '@/composables/useSettingsPanel'
+import ModelSelector from '@/components/ModelSelector.vue'
+
+const modelsStore = useModelsStore()
+const { openSettings } = useSettingsPanel()
 
 const props = defineProps<{
   disabled?: boolean
   conversationDefaultModel?: string | null
   isStreaming?: boolean
+  hasApiKey?: boolean
+  isOnline?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [content: string, modelOverride: string | null, webSearchEnabled: boolean, searchPreset: SearchPreset]
   stopGeneration: []
+  updateDefaultModel: [modelId: string]
 }>()
 
 // Input state
@@ -54,7 +62,7 @@ const effectiveModel = computed(() => {
 })
 
 const effectiveModelDisplay = computed(() => {
-  const model = AVAILABLE_MODELS.find(m => m.id === effectiveBaseModel.value)
+  const model = modelsStore.availableModels.find(m => m.id === effectiveBaseModel.value)
   let name = model?.name ?? effectiveBaseModel.value
   if (webSearchEnabled.value) {
     const preset = SEARCH_PRESETS.find(p => p.id === searchPreset.value)
@@ -99,10 +107,48 @@ function autoResize(event: Event) {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
 }
 
-function selectModel(modelId: string | null) {
+function handleModelSelect(modelId: string | null) {
   modelOverride.value = modelId
   showModelDropdown.value = false
+
+  // If a specific model was selected (not "use default"), save it as the new default
+  if (modelId !== null) {
+    emit('updateDefaultModel', modelId)
+  }
 }
+
+function toggleModelDropdown() {
+  showModelDropdown.value = !showModelDropdown.value
+}
+
+function closeModelDropdown() {
+  showModelDropdown.value = false
+}
+
+// Mobile detection for teleporting the model dropdown
+const isMobile = ref(window.innerWidth <= 560)
+function checkMobile() { isMobile.value = window.innerWidth <= 560 }
+
+// Close dropdown when clicking outside
+function handleClickOutside(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (!target.closest('[data-dropdown="model"]') && !target.closest('.mobile-dropdown-overlay')) {
+    showModelDropdown.value = false
+  }
+  if (!target.closest('[data-dropdown="search"]')) {
+    showSearchPresetDropdown.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('resize', checkMobile)
+})
 
 function selectSearchPreset(preset: SearchPreset) {
   searchPreset.value = preset
@@ -117,138 +163,152 @@ function toggleWebSearch() {
   }
 }
 
-// Close dropdowns on click outside
-function handleClickOutside(event: MouseEvent) {
-  const target = event.target as HTMLElement
-  if (!target.closest('[data-dropdown="model"]')) {
-    showModelDropdown.value = false
-  }
-  if (!target.closest('[data-dropdown="search"]')) {
-    showSearchPresetDropdown.value = false
-  }
-}
-
-// Setup click outside listener
-watch([showModelDropdown, showSearchPresetDropdown], ([model, search]) => {
-  if (model || search) {
-    document.addEventListener('click', handleClickOutside)
-  } else {
-    document.removeEventListener('click', handleClickOutside)
-  }
+// Computed: can send message?
+const canSend = computed(() => {
+  if (props.disabled) return false
+  if (props.isStreaming) return false
+  if (props.hasApiKey === false) return false
+  if (props.isOnline === false) return false
+  if (!content.value.trim()) return false
+  return true
 })
+
+// Computed: send button tooltip
+const sendButtonTooltip = computed(() => {
+  if (props.hasApiKey === false) {
+    return 'API key required — add one in Settings'
+  }
+  if (props.isOnline === false) {
+    return 'You are offline'
+  }
+  if (!content.value.trim()) {
+    return 'Enter a message to send'
+  }
+  return 'Send message (⌘+Enter)'
+})
+
+// Computed: is deep search enabled?
+const isDeepSearch = computed(() => {
+  return webSearchEnabled.value && searchPreset.value === 'deep'
+})
+
 </script>
 
 <template>
-  <div class="border-t border-gray-700 bg-gray-800 p-4" data-testid="message-composer">
+  <div class="composer" data-testid="message-composer">
     <!-- Model & Web Search Controls -->
-    <div class="flex flex-wrap items-center gap-2 mb-3">
+    <div class="composer-controls">
       <!-- Model Selector -->
       <div class="relative" data-dropdown="model">
         <button
-          class="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-colors"
-          :class="modelOverride 
-            ? 'bg-blue-900/50 border-blue-500 text-blue-300' 
-            : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-500'"
+          class="control-btn"
+          :class="{ 'control-btn--override': modelOverride }"
           data-testid="model-selector-btn"
-          @click.stop="showModelDropdown = !showModelDropdown"
+          @click.stop="toggleModelDropdown"
         >
-          <span>🤖</span>
-          <span>{{ effectiveModelDisplay }}</span>
-          <span v-if="modelOverride" class="text-blue-400">(override)</span>
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="control-icon">◐</span>
+          <span class="control-label">{{ effectiveModelDisplay }}</span>
+          <span v-if="modelOverride" class="override-badge">(override)</span>
+          <svg class="chevron" :class="{ 'chevron--open': showModelDropdown }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        
-        <!-- Dropdown -->
-        <div
-          v-if="showModelDropdown"
-          class="absolute bottom-full left-0 mb-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto"
-          data-testid="model-dropdown"
-        >
-          <!-- Use conversation default option -->
-          <button
-            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between"
-            :class="!modelOverride ? 'bg-gray-700' : ''"
-            @click="selectModel(null)"
-          >
-            <span>Use conversation default</span>
-            <span v-if="!modelOverride" class="text-emerald-400">✓</span>
-          </button>
-          <div class="border-t border-gray-700"></div>
-          
-          <!-- Model options -->
-          <button
-            v-for="model in AVAILABLE_MODELS"
-            :key="model.id"
-            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between"
-            :class="modelOverride === model.id ? 'bg-gray-700' : ''"
-            @click="selectModel(model.id)"
-          >
-            <div>
-              <span class="font-medium">{{ model.name }}</span>
-              <span class="text-gray-500 text-xs ml-2">{{ model.id }}</span>
+
+        <!-- Enhanced Model Selector Dropdown -->
+        <!-- Desktop: inline absolute dropdown. Mobile: teleported full-screen overlay -->
+        <Teleport to="body" :disabled="!isMobile">
+          <Transition name="dropdown">
+            <div
+              v-if="showModelDropdown"
+              :class="isMobile ? 'mobile-dropdown-overlay' : 'dropdown-container'"
+              data-testid="model-dropdown"
+              @click.stop="isMobile ? closeModelDropdown() : undefined"
+            >
+              <div v-if="isMobile" class="mobile-dropdown-panel" @click.stop>
+                <ModelSelector
+                  :model-value="modelOverride"
+                  :conversation-default="props.conversationDefaultModel ?? DEFAULT_MODEL"
+                  @update:model-value="handleModelSelect"
+                  @close="closeModelDropdown"
+                />
+              </div>
+              <ModelSelector
+                v-else
+                :model-value="modelOverride"
+                :conversation-default="props.conversationDefaultModel ?? DEFAULT_MODEL"
+                @update:model-value="handleModelSelect"
+                @close="closeModelDropdown"
+              />
             </div>
-            <span v-if="modelOverride === model.id" class="text-emerald-400">✓</span>
-          </button>
-        </div>
+          </Transition>
+        </Teleport>
       </div>
 
       <!-- Web Search Toggle -->
       <button
-        class="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-colors"
-        :class="webSearchEnabled 
-          ? 'bg-blue-900/50 border-blue-500 text-blue-300' 
-          : 'bg-gray-700 border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300'"
+        class="control-btn"
+        :class="{ 'control-btn--active': webSearchEnabled }"
         data-testid="web-search-toggle"
         @click="toggleWebSearch"
       >
-        <span>🔍</span>
-        <span>{{ webSearchEnabled ? 'Web Search On' : 'Web Search' }}</span>
+        <span class="control-icon">🔍</span>
+        <span class="control-label">{{ webSearchEnabled ? 'Web Search On' : 'Web Search' }}</span>
       </button>
 
       <!-- Search Preset Selector (only when web search is on) -->
       <div v-if="webSearchEnabled" class="relative" data-dropdown="search">
         <button
-          class="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full bg-gray-700 border border-gray-600 text-gray-300 hover:border-gray-500 transition-colors"
+          class="control-btn"
           data-testid="search-preset-btn"
           @click.stop="showSearchPresetDropdown = !showSearchPresetDropdown"
         >
-          <span>{{ SEARCH_PRESETS.find(p => p.id === searchPreset)?.name }}</span>
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span class="control-label">{{ SEARCH_PRESETS.find(p => p.id === searchPreset)?.name }}</span>
+          <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        
+
         <div
           v-if="showSearchPresetDropdown"
-          class="absolute bottom-full left-0 mb-1 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-50"
+          class="preset-dropdown"
           data-testid="search-preset-dropdown"
         >
           <button
             v-for="preset in SEARCH_PRESETS"
             :key="preset.id"
-            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between"
-            :class="searchPreset === preset.id ? 'bg-gray-700' : ''"
+            class="preset-option"
+            :class="{ 'preset-option--selected': searchPreset === preset.id }"
             @click="selectSearchPreset(preset.id)"
           >
-            <div>
-              <span class="font-medium">{{ preset.name }}</span>
-              <p class="text-gray-500 text-xs">{{ preset.description }}</p>
+            <div class="preset-info">
+              <span class="preset-name">{{ preset.name }}</span>
+              <span class="preset-desc">{{ preset.description }}</span>
             </div>
-            <span v-if="searchPreset === preset.id" class="text-emerald-400">✓</span>
+            <span v-if="searchPreset === preset.id" class="check-icon">✓</span>
           </button>
         </div>
       </div>
 
       <!-- Effective model display -->
-      <span class="text-xs text-gray-500 ml-auto hidden sm:inline" data-testid="effective-model">
-        Sending as: <code class="bg-gray-900 px-1 rounded">{{ effectiveModel }}</code>
+      <span class="effective-model" data-testid="effective-model">
+        Sending as: <code class="model-code">{{ effectiveModel }}</code>
       </span>
     </div>
 
+    <!-- Deep Search Warning -->
+    <div
+      v-if="isDeepSearch"
+      class="warning-banner"
+      data-testid="deep-search-warning"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="warning-icon" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
+      <span>Deep search is slower and more expensive than standard search</span>
+    </div>
+
     <!-- Input Area -->
-    <div class="flex gap-2">
+    <div class="input-area">
       <textarea
         ref="textareaRef"
         v-model="content"
@@ -256,39 +316,386 @@ watch([showModelDropdown, showSearchPresetDropdown], ([model, search]) => {
         :disabled="disabled || isStreaming"
         rows="1"
         placeholder="Type a message... (Cmd+Enter to send)"
-        class="flex-1 resize-none rounded-lg border border-gray-600 bg-gray-900 px-4 py-3 text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        class="composer-input"
         @keydown="handleKeydown"
         @input="autoResize"
       ></textarea>
-      
+
       <!-- Stop Generation Button (when streaming) -->
       <button
         v-if="isStreaming"
         data-testid="stop-btn"
-        class="self-end rounded-lg bg-red-600 px-4 py-3 font-medium text-white transition-colors hover:bg-red-700"
+        class="action-btn action-btn--stop"
         @click="emit('stopGeneration')"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="action-icon" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
         </svg>
       </button>
-      
+
       <!-- Send Button -->
       <button
         v-else
         data-testid="send-btn"
-        :disabled="disabled || !content.trim()"
-        class="self-end rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="!canSend"
+        :title="sendButtonTooltip"
+        class="action-btn action-btn--send"
         @click="handleSend"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="action-icon" viewBox="0 0 20 20" fill="currentColor">
           <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
         </svg>
       </button>
     </div>
-    
-    <p class="mt-2 text-xs text-gray-500">
-      Press <kbd class="rounded bg-gray-700 px-1">⌘</kbd> + <kbd class="rounded bg-gray-700 px-1">Enter</kbd> to send
+
+    <!-- Status indicators -->
+    <p
+      v-if="isOnline === false"
+      class="status-warning"
+      data-testid="offline-status"
+    >
+      You are offline
+    </p>
+    <p
+      v-else-if="hasApiKey === false"
+      class="status-warning"
+      data-testid="no-api-key-status"
+    >
+      API key not set — add one in <a class="settings-link" @click.prevent="openSettings">Settings</a> to send messages
+    </p>
+
+    <p class="shortcut-hint">
+      Press <kbd class="kbd">⌘</kbd> + <kbd class="kbd">Enter</kbd> to send
     </p>
   </div>
 </template>
+
+<style scoped>
+.composer {
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  padding: 1rem;
+}
+
+/* Controls Row */
+.composer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.control-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: rgba(var(--accent-rgb), 0.05);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.control-btn:hover {
+  border-color: var(--border-color);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--text-primary);
+}
+
+.control-btn--override {
+  background: rgba(var(--accent-rgb), 0.15);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
+}
+
+.control-btn--override:hover {
+  border-color: var(--accent);
+}
+
+.control-btn--active {
+  background: rgba(var(--branch-blue-rgb), 0.15);
+  border-color: rgba(var(--branch-blue-rgb), 0.4);
+  color: var(--branch-blue);
+}
+
+.control-icon {
+  font-size: 0.875rem;
+}
+
+.control-label {
+  font-weight: 500;
+}
+
+.override-badge {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.chevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform var(--transition-fast);
+}
+
+.chevron--open {
+  transform: rotate(180deg);
+}
+
+.dropdown-container {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.5rem;
+  z-index: 50;
+}
+
+/* Mobile: full-screen overlay (teleported to body, escapes all clipping ancestors) */
+.mobile-dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.mobile-dropdown-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+/* Preset Dropdown */
+.preset-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.25rem;
+  width: 12rem;
+  background: var(--glass-bg-solid);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.preset-option {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.preset-option:hover {
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.preset-option--selected {
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.preset-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.preset-name {
+  font-weight: 500;
+}
+
+.preset-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.check-icon {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Effective Model */
+.effective-model {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .effective-model {
+    display: inline;
+  }
+}
+
+.model-code {
+  background: var(--bg-primary);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
+/* Warning Banner */
+.warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-lg);
+  font-size: 0.75rem;
+  color: var(--warning);
+}
+
+.warning-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* Input Area */
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.composer-input {
+  flex: 1;
+  resize: none;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-normal);
+}
+
+.composer-input::placeholder {
+  color: var(--text-muted);
+}
+
+.composer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.composer-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Action Buttons */
+.action-btn {
+  align-self: flex-end;
+  padding: 0.75rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 500;
+  color: var(--bg-primary);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn--send {
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.95) 0%, rgba(var(--accent-rgb), 0.8) 100%);
+}
+
+.action-btn--send:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 1) 0%, rgba(var(--accent-rgb), 0.9) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-accent);
+}
+
+.action-btn--stop {
+  background: var(--error);
+}
+
+.action-btn--stop:hover {
+  background: var(--error);
+}
+
+.action-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Status Warning */
+.status-warning {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--warning);
+}
+
+.settings-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Shortcut Hint */
+.shortcut-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.kbd {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  background: var(--bg-card-hover);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
+/* Dropdown Transitions */
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+}
+
+.dropdown-enter-to,
+.dropdown-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+</style>

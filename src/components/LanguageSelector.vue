@@ -140,35 +140,31 @@ onUnmounted(() => {
 .language-selector {
   position: relative;
   z-index: 1000;
-  background-color: #0f172a;
-  border-radius: 0.5rem;
-  transition: background-color 0.4s ease;
-}
-
-.language-selector.day-mode {
-  background-color: #fff8f0;
 }
 
 .language-trigger {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  height: 42px;
+  padding: 0 0.75rem;
   border-radius: 0.5rem;
-  border: 1px solid rgba(231, 210, 124, 0.4);
-  background-color: #0f172a;
-  color: #e7d27c;
+  border: 1px solid var(--btn-ghost-border);
+  background: transparent;
+  color: var(--accent);
   cursor: pointer;
   transition: all 0.4s ease;
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.875rem;
-  position: relative;
+  box-sizing: border-box;
 }
 
 .language-trigger:hover {
-  background-color: #1e293b;
-  border-color: #e7d27c;
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: var(--accent);
 }
+
 
 .globe-icon {
   width: 18px;
@@ -196,7 +192,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #0f172a;
+  background: var(--glass-bg);
+  backdrop-filter: blur(4px);
   border-radius: 0.5rem;
   transition: all 0.4s ease;
 }
@@ -221,11 +218,11 @@ onUnmounted(() => {
   top: calc(100% + 0.5rem);
   right: 0;
   min-width: 180px;
-  background-color: #0f172a;
-  border: 1px solid rgba(231, 210, 124, 0.3);
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
   border-radius: 0.5rem;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
   transition: all 0.4s ease;
 }
 
@@ -237,19 +234,19 @@ onUnmounted(() => {
   padding: 0.75rem 1rem;
   border: none;
   background-color: transparent;
-  color: #e2e8f0;
+  color: var(--text-primary);
   cursor: pointer;
   text-align: left;
   transition: all 0.4s ease;
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
 }
 
 .locale-option:hover {
-  background-color: #1e293b;
+  background-color: var(--bg-card-hover);
 }
 
 .locale-option.active {
-  background-color: #1a2332;
+  background-color: rgba(var(--accent-rgb), 0.1);
 }
 
 .locale-native {
@@ -259,14 +256,14 @@ onUnmounted(() => {
 
 .locale-english {
   font-size: 0.75rem;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--text-muted);
   transition: color 0.4s ease;
 }
 
 .check-icon {
   width: 16px;
   height: 16px;
-  color: #e7d27c;
+  color: var(--accent);
   transition: color 0.4s ease;
 }
 
@@ -284,45 +281,9 @@ onUnmounted(() => {
   transform: translateY(-8px);
 }
 
-/* Day mode styles */
-.language-selector.day-mode .language-trigger {
-  background-color: #fff8f0;
-  border-color: #c4956a;
-  color: #c4956a;
-}
-
-.language-selector.day-mode .language-trigger:hover {
-  background-color: #f5e6d3;
-  border-color: #c4956a;
-}
-
-.language-selector.day-mode .loading-overlay {
-  background-color: #fff8f0;
-}
-
-.language-selector.day-mode .language-dropdown {
-  background-color: #fff8f0;
-  border-color: #c4956a;
-}
-
-.language-selector.day-mode .locale-option {
-  color: #2d2a26;
-}
-
-.language-selector.day-mode .locale-option:hover {
-  background-color: #f5e6d3;
-}
-
-.language-selector.day-mode .locale-option.active {
-  background-color: #f9efe3;
-}
-
-.language-selector.day-mode .locale-english {
-  color: rgba(45, 42, 38, 0.6);
-}
-
-.language-selector.day-mode .check-icon {
-  color: #c4956a;
+/* Night mode: gold-tinted hover for locale options */
+.locale-option:hover {
+  background-color: rgba(var(--accent-rgb), 0.1);
 }
 
 /* RTL support for page-level RTL (e.g., when Arabic is selected) */
