@@ -21,8 +21,8 @@
 - Optional encryption later (passphrase-based).
 
 ## Current Date / Context
-- Today: 2026-02-13
-- Notes: Milestone 16 complete. Sync-ready client architecture with append-only ops log, encryption at rest, SyncAdapter abstraction. Reconciliation pass: all vue-tsc errors fixed, op emission uses safeAppendOp with failure tracking.
+- Today: 2026-03-16
+- Notes: Milestone 17 complete. Server deployed to Railway (Hono + Drizzle + PostgreSQL). Full sync pipeline: push/pull ops, conflict detection, conflict resolution UI, sync orchestrator. Integration tested against production server.
 
 ## Definition of Done (Green Bar Rule)
 A milestone is **not complete** unless:
@@ -369,6 +369,30 @@ Notes / decisions:
 - **Client ID**: UUID in localStorage at `bonsai:sync:clientId`, generated once per device.
 - **Non-blocking**: Op writes use `safeAppendOp()` — failures recorded as `status: 'failed'` for diagnostics, never block user actions.
 - **Schema**: syncOps table with indices on id, status, createdAt, [conversationId+createdAt].
+
+### Milestone 17 — Sync Server & Conflict Resolution
+Status: ✅ Done
+- [x] Hono server with Drizzle ORM on PostgreSQL (Railway deployment)
+- [x] Magic link auth (Resend), Google OAuth, JWT (jose)
+- [x] BTCPay Server webhook integration for subscription management
+- [x] Sync routes: POST /sync/push, GET /sync/pull, POST /sync/ack
+- [x] RemoteSyncAdapter on client: push/pull encrypted ops to server
+- [x] Conflict detection: op-level conflict matrix (conflictDetector.ts, 25 unit tests)
+- [x] discardOp in opsService for "keep theirs" resolution (2 tests)
+- [x] Sync orchestrator: pull → detect → resolve → push cycle (14 tests)
+- [x] ConflictResolver Vue modal: one conflict at a time, 3 resolution buttons (5 component tests)
+- [x] useSync composable: 60s interval, online watcher, lifecycle management
+- [x] Sync status UI in Settings: colored indicator + "Sync now" button
+- [x] E2E tests for conflict resolution flow (10 tests)
+- [x] Integration tested: full push/pull round-trip verified against production server
+Notes / decisions:
+- **Conflict strategy**: Op-level detection with user-prompted resolution (one device at a time expected)
+- **Conflict matrix**: 5 conflict types (edit-vs-edit, edit-vs-delete, rename-vs-rename, rename-vs-delete, create-vs-delete)
+- **Resolution options**: Keep mine (discard remote), Keep theirs (discard local), Keep both (branch)
+- **Server deployment**: Railway with Dockerfile, auto-migrate on startup
+- **Auth**: JWT access tokens (15min) + refresh tokens (30 days), stored in sessions table
+- **Subscription gate**: requireSubscription middleware checks active subscription before sync ops
+- **Shared sync state**: Module-level reactive refs (syncState.ts) for cross-component access
 
 ### Post-MVP
 - (Future milestone ideas TBD)

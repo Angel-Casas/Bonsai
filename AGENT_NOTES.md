@@ -1968,3 +1968,44 @@ Each render creates a new reference, causing Vue to think the prop changed, trig
 - `npm test`: 445 passed (was 441, +4 new tests)
 - `npm run test:e2e`: 76 passed
 - `npx vue-tsc -b`: 0 errors
+
+---
+
+### 2026-03-16 — Milestone 17 (Sync Server & Conflict Resolution)
+
+**Summary:**
+- Deployed Hono sync server to Railway with PostgreSQL, auto-migrations on startup
+- Full sync pipeline: push/pull encrypted ops, op-level conflict detection, user-prompted resolution
+- ConflictResolver Vue modal with side-by-side diff display
+- Sync orchestrator composable with 60s interval and online-status watcher
+- Integration tested against production server: full push/pull round-trip verified
+
+**Decisions / Rationale (not explicitly in plan):**
+- Conflict detection uses pure function (no side effects) for easy testing
+- SyncAdapter interface in syncOrchestrator.ts differs from syncAdapter.ts — orchestrator adds `pullRemoteOps` method
+- Used module-level reactive refs pattern (syncState.ts) for sharing sync state between App.vue and SettingsView.vue, following existing useSettingsPanel pattern
+- "Keep both" resolution option hidden for delete-type conflicts (doesn't make semantic sense)
+- E2E tests inject conflicts via Vue's internal `__vue_app__` to access reactive state directly
+
+**Alternatives considered:**
+- CRDT-based conflict resolution: rejected as overkill for "one device at a time" usage pattern
+- Conversation-level locking: rejected as too coarse-grained
+- Pinia store for sync state: rejected in favor of simpler module-level refs
+
+**Deviations from plan:**
+- syncOrchestrator exports `SyncAdapter` type (named differently from the existing SyncAdapter in syncAdapter.ts)
+- ConflictResolver data-testid attributes differ from plan (e.g., `keep-remote-btn` vs `keep-remote`)
+- applyRemoteOp in useSync is a TODO placeholder (console.log) — needs wiring to conversationStore in future task
+
+**Risks / Gotchas / Debugging notes:**
+- Railway requires `--path-as-root` flag when deploying from a subdirectory
+- Node.js ESM requires .js extensions on all relative imports in server code
+- Railway's `railway run` overrides env vars with internal hostnames (not resolvable locally)
+- PostgreSQL UUID columns reject non-UUID strings (sync push test initially used "test-op-001")
+
+**Suggestions (Optional / Post-MVP):**
+- Wire applyRemoteOp to actually replay ops into local DB (conversationStore.applyRemoteOp)
+- Add optimistic UI for sync state (show syncing indicator in nav bar)
+- Add sync conflict history/audit log
+- Rate-limit sync retries on error state
+- Consider WebSocket for real-time sync push notifications
